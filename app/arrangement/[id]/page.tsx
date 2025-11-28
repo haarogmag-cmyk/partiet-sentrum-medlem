@@ -1,16 +1,17 @@
 import { createClient } from '@/utils/supabase/server'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { notFound } from 'next/navigation'
+import ShareButtons from '@/components/share-buttons' // <--- NY IMPORT
 
 // Denne siden er offentlig (ingen login sjekk)
 export default async function PublicEventPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
 
-  // Hent eventet (RLS-regelen vi lagde sikrer at vi kun får svar hvis det er publisert)
+  // Hent eventet (RLS-regelen sikrer at vi kun får svar hvis det er publisert)
   const { data: event } = await supabase
     .from('events')
     .select('*')
@@ -44,7 +45,7 @@ export default async function PublicEventPage({ params }: { params: Promise<{ id
             
             {/* Venstre: Info */}
             <div className="md:col-span-2 space-y-8">
-                <Card className="p-8 shadow-xl border-0">
+                <Card className="p-8 shadow-xl border-0 bg-white">
                     <h2 className="text-2xl font-bold mb-4">Om arrangementet</h2>
                     <div className="prose prose-lg text-slate-600 whitespace-pre-wrap leading-relaxed">
                         {event.description || 'Ingen beskrivelse lagt til.'}
@@ -54,7 +55,7 @@ export default async function PublicEventPage({ params }: { params: Promise<{ id
 
             {/* Høyre: Call to Action (Verving!) */}
             <div className="space-y-6">
-                <Card className="p-6 border-l-4 border-l-[#c93960] shadow-lg">
+                <Card className="p-6 border-l-4 border-l-[#c93960] shadow-lg bg-white">
                     <h3 className="font-bold text-lg mb-2">Bli med?</h3>
                     <p className="text-sm text-slate-500 mb-6">
                         Dette arrangementet er for medlemmer av Partiet Sentrum.
@@ -67,7 +68,7 @@ export default async function PublicEventPage({ params }: { params: Promise<{ id
                             </Button>
                         </Link>
                         <Link href="/login" className="block">
-                            <Button variant="outline" className="w-full">
+                            <Button variant="secondary" className="w-full">
                                 Allerede medlem? Logg inn
                             </Button>
                         </Link>
@@ -80,10 +81,10 @@ export default async function PublicEventPage({ params }: { params: Promise<{ id
 
                 <div className="text-center">
                     <p className="text-sm font-bold opacity-50 mb-2">Del arrangementet</p>
-                    <div className="flex justify-center gap-2">
-                        {/* Her kan vi legge til delingsknapper senere */}
-                        <Button variant="ghost" size="sm" className="bg-white">Kopier lenke 🔗</Button>
-                    </div>
+                    
+                    {/* HER ER DE NYE KNAPPENE */}
+                    <ShareButtons title={event.title} />
+                    
                 </div>
             </div>
         </div>
