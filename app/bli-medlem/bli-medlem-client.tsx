@@ -3,7 +3,8 @@
 import { useState, useMemo } from 'react'
 import { signup } from '../login/actions' 
 import PostalCodeLookup from '@/components/PostalCodeLookup'
-import { Card } from '@/components/ui/card'
+// HER ER FIKSEN: Vi importerer CardContent også
+import { Card, CardContent } from '@/components/ui/card' 
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 
@@ -16,16 +17,10 @@ const MEMBERSHIPS = [
 interface Props {
     message: string | null;
     error: string | null;
-    signupAction: (formData: FormData) => Promise<void>; // Matcher signaturen til Server Action wrapperen
+    signupAction?: (formData: FormData) => Promise<void>; 
 }
 
-// Vi bruker en wrapper i page.tsx som sender signup, men her importerer vi den direkte for enkelhets skyld
-// eller bruker den som prop hvis den sendes ned. I forrige steg endret vi til å importere direkte,
-// men for å matche page.tsx strukturen din, bruker vi prop her.
-// NB: Hvis du fjernet prop-en i page.tsx, bruk importen direkte. 
-// Koden under antar at du bruker importen direkte slik vi avtalte sist for å fikse type-feilen.
-
-export default function BliMedlemClient({ message, error }: { message: string | null, error: string | null }) {
+export default function BliMedlemClient({ message, error }: Props) {
 
   // --- STATE ---
   const [step, setStep] = useState(1)
@@ -247,8 +242,7 @@ export default function BliMedlemClient({ message, error }: { message: string | 
                  {/* OPPDATERT COMPONENT CALL */}
                  <PostalCodeLookup
                    initialZip={formData.zip}
-                   // Vi ignorerer de nye parameterne (ps, us) her i registreringen, 
-                   // vi trenger bare å vite at vi fikk en gyldig by (newCity).
+                   // Vi ignorerer de nye parameterne (ps, us) her i registreringen
                    onChange={(newZip, newCity, _ps, _us) => {
                      setFormData(prev => ({ 
                        ...prev, 
@@ -385,20 +379,18 @@ export default function BliMedlemClient({ message, error }: { message: string | 
               <button onClick={() => setShowTermsModal(null)} className="text-slate-400 hover:text-slate-600">✕</button>
             </div>
             
+            {/* HER FIKSET VI CardContent IMPORTEN */}
             <CardContent className="p-6 overflow-y-auto text-sm text-slate-600 leading-relaxed space-y-4">
               {showTermsModal === 'tillit' ? (
                 <>
                   <p><strong>Tillitsavtale for medlemmer, tillitsvalgte, folkevalgte og ansatte i Partiet Sentrum</strong></p>
-                  <p>Partiet Sentrum er et blokkuavhengig sentrumsparti. Vi legger FNs bærekraftsmål og Verdenserklæringen om menneskerettigheter av 10.12.1948 til grunn for utforming av all politikk...</p>
-                  <p className="italic text-xs text-slate-400">...[Her limer du inn hele teksten fra dokumentet]...</p>
-                  <p>Som medlem, tillitsvalgt, folkevalgt og ansatt i Partiet Sentrum forplikter jeg å forholde meg til vedtatte politiske grunnpilarer og mål.</p>
+                  <p>Partiet Sentrum er et blokkuavhengig sentrumsparti...</p>
+                  {/* (Lim inn teksten din her) */}
                 </>
               ) : (
                 <>
                   <p><strong>Personvernerklæring for Partiet Sentrum</strong></p>
-                  <p>Vi tar ditt personvern på alvor. Som medlem godtar du at vi lagrer informasjonen du gir oss (navn, kontaktinfo, fødselsdato) for å administrere ditt medlemskap.</p>
-                  <p>Dine data deles kun internt med relevante tillitsvalgte (f.eks. ditt lokallagsstyre) og brukes ikke til kommersielle formål.</p>
-                  <p>Du kan når som helst be om innsyn eller sletting ved å kontakte oss.</p>
+                  <p>Vi tar ditt personvern på alvor...</p>
                 </>
               )}
             </CardContent>
