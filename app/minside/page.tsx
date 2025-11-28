@@ -4,9 +4,12 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+
+// Undermoduler
 import DownloadCertificateButton from './download-certificate-button';
 import VolunteerCard from './volunteer-card';
-import CalendarButton from './calendar-button'; // <--- NY IMPORT
+import CalendarButton from './calendar-button';
+import EditProfileModal from './edit-profile-modal'; // <--- DEN NYE REDIGERINGSKNAPPEN
 
 export default async function MinSidePage() {
   const supabase = await createClient();
@@ -24,20 +27,23 @@ export default async function MinSidePage() {
 
   if (!member) return <div className="p-10 text-center">Fant ikke medlemsdata.</div>;
 
-  // 3. HENT ORGANISASJONS-IDer
-  const { data: fylkeslag } = await supabase
-    .from('organizations')
-    .select('id, name')
-    .eq('name', `Partiet Sentrum ${member.fylke_navn_raw}`)
-    .eq('level', 'county')
-    .maybeSingle();
+  const isYouth = member.membership_type?.youth;
 
-  const { data: lokallag } = await supabase
-    .from('organizations')
-    .select('id, name')
-    .eq('name', `Partiet Sentrum ${member.kommune_navn_raw}`)
-    .eq('level', 'local')
-    .maybeSingle();
+  // 3. HENT ORGANISASJONS-IDer (PS og US)
+  
+  // A. Partiet Sentrum
+  const { data: psFylke } = await supabase.from('organizations').select('id, name').eq('name', `Partiet Sentrum ${member.fylke_navn_raw}`).eq('level', 'county').maybeSingle();
+  const { data: psLokal } = await supabase.from('organizations').select('id, name').eq('name', `Partiet Sentrum ${member.kommune_navn_raw}`).eq('level', 'local').maybeSingle();
+
+  // B. Unge Sentrum (Kun hvis ungdom)
+  let usFylke = null;
+  let usLokal = null;
+  if (isYouth) {
+      const { data: uf } = await supabase.from('organizations').select('name, id').eq('name', `Unge Sentrum ${member.fylke_navn_raw}`).eq('level', 'county').maybeSingle();
+      const { data: ul } = await supabase.from('organizations').select('name, id').eq('name', `Unge Sentrum ${member.kommune_navn_raw}`).eq('level', 'local').maybeSingle();
+      usFylke = uf;
+      usLokal = ul;
+  }
 
   // 4. HENT EVENTS (Kun publiserte)
   const { data: allEvents } = await supabase
@@ -46,12 +52,14 @@ export default async function MinSidePage() {
     .eq('is_published', true)
     .order('start_time', { ascending: false });
 
-  // Sorter events i bøtter
-  const localEvents = allEvents?.filter((e: any) => e.organization_id === lokallag?.id) || [];
-  const countyEvents = allEvents?.filter((e: any) => e.organization_id === fylkeslag?.id) || [];
-  const nationalEvents = allEvents?.filter((e: any) => !e.organization_id) || [];
+  // Samle mine org-IDer for filtrering
+  const myOrgIds = [psLokal?.id, psFylke?.id, usLokal?.id, usFylke?.id].filter(Boolean);
 
-  const isYouth = member.membership_type?.youth;
+  // Sorter events i bøtter
+  // (Her bruker vi enkel logikk: Matcher orgID. Nasjonale har null orgID).
+  const localEvents = allEvents?.filter((e: any) => [psLokal?.id, usLokal?.id].includes(e.organization_id)) || [];
+  const countyEvents = allEvents?.filter((e: any) => [psFylke?.id, usFylke?.id].includes(e.organization_id)) || [];
+  const nationalEvents = allEvents?.filter((e: any) => !e.organization_id) || [];
 
   // Sjekk om brukeren er Admin
   const { data: adminRoles } = await supabase.from('admin_roles').select('role').eq('user_id', user.id);
@@ -117,14 +125,14 @@ export default async function MinSidePage() {
                     <h2 className="text-xl font-bold text-ps-text">Arrangementer</h2>
                 </div>
                 
-                {/* KALENDER KNAPP (NY!) */}
+                {/* KALENDER KNAPP */}
                 <div className="w-full md:w-auto">
                     <CalendarButton />
                 </div>
             </div>
             
-            <EventSection title="Lokalt" events={localEvents} emptyText={`Ingen møter planlagt i ${member.kommune_navn_raw || 'ditt lag'} ennå.`} />
-            <EventSection title="Fylke" events={countyEvents} emptyText={`Ingen møter i ${member.fylke_navn_raw || 'ditt fylke'} ennå.`} />
+            <EventSection title="Lokalt" events={localEvents} emptyText={`Ingen møter planlagt lokalt ennå.`} />
+            <EventSection title="Fylke" events={countyEvents} emptyText={`Ingen møter i fylket ennå.`} />
             <EventSection title="Nasjonalt" events={nationalEvents} emptyText="Ingen nasjonale arrangementer." />
         </div>
 
@@ -143,24 +151,30 @@ export default async function MinSidePage() {
           </Card>
         )}
 
-        {/* --- 5. MINE OPPLYSNINGER --- */}
+        {/* --- 5. MINE OPPLYSNINGER (MED REDIGERING) --- */}
         <Card>
-          <CardHeader title="Mine opplysninger" />
+          {/* Header med Rediger-knapp */}
+          <div className="p-4 border-b border-ps-primary/10 bg-[#fffcf1]/50 flex justify-between items-center">
+             <h3 className="font-bold text-[#5e1639]">Mine opplysninger</h3>
+             <EditProfileModal member={member} />
+          </div>
+          
           <CardContent className="p-0">
             <div className="divide-y divide-ps-primary/5 text-sm">
                 <InfoRow label="Navn" value={`${member.first_name} ${member.last_name}`} />
                 <InfoRow label="E-post" value={member.email} />
                 <InfoRow label="Telefon" value={member.phone} />
                 <InfoRow label="Adresse" value={`${member.postal_code} ${member.city}`} />
-                <div className="bg-ps-primary/5 p-2 font-bold text-xs uppercase text-ps-text/50 pl-4">Partiet Sentrum</div>
-                <InfoRow label="Lokallag" value={lokallag?.name || 'Ikke funnet'} />
-                <InfoRow label="Fylkeslag" value={fylkeslag?.name || 'Ikke funnet'} />
                 
+                <div className="bg-ps-primary/5 p-2 font-bold text-xs uppercase text-ps-text/50 pl-4 mt-2">Partiet Sentrum</div>
+                <InfoRow label="Lokallag" value={psLokal?.name || 'Ikke funnet'} />
+                <InfoRow label="Fylkeslag" value={psFylke?.name || 'Ikke funnet'} />
+
                 {isYouth && (
                     <>
-                        <div className="bg-us-primary/5 p-2 font-bold text-xs uppercase text-us-primary pl-4">Unge Sentrum</div>
-                        <InfoRow label="Lokallag" value={lokallag?.name?.replace('Partiet', 'Unge') || 'Ikke funnet'} />
-                        <InfoRow label="Fylkeslag" value={fylkeslag?.name?.replace('Partiet', 'Unge') || 'Ikke funnet'} />
+                        <div className="bg-us-primary/5 p-2 font-bold text-xs uppercase text-us-primary pl-4 mt-2">Unge Sentrum</div>
+                        <InfoRow label="Lokallag" value={usLokal?.name || 'Ikke funnet'} />
+                        <InfoRow label="Fylkeslag" value={usFylke?.name || 'Ikke funnet'} />
                     </>
                 )}
             </div>

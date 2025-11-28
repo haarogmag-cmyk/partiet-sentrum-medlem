@@ -1,19 +1,22 @@
 import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { Suspense } from 'react'; // <--- VIKTIG: Import for å fikse Vercel-feil
+import { Suspense } from 'react';
 
 // Moduler / Faner
 import OkonomiView from './tabs/okonomi-view';
 import KommunikasjonView from './tabs/kommunikasjon-view';
 import ArrangementView from './tabs/arrangement-view';
 import SettingsView from './tabs/settings-view';
-import RessursView from './tabs/ressurs-view'; // Ressursbank
+import RessursView from './tabs/ressurs-view';
+import InternArkivView from './tabs/intern-arkiv-view'; // <--- NY IMPORT
 
 // Komponenter for Medlemslisten
 import MemberFilter from './filter';
 import Pagination from './pagination';
 import DashboardTable from './dashboard-table';
+import GrowthChart from '@/components/dashboard/growth-chart';
+import TasksWidget from '@/components/dashboard/tasks-widget';
 
 // UI Komponenter
 import { Badge } from '@/components/ui/badge';
@@ -34,7 +37,6 @@ export default async function Dashboard(props: {
   if (!user) redirect('/login');
 
   // --- 1. HENT ADMIN ROLLE & HIERARKI ---
-  // Henter rollen din selv om organisasjons-koblingen skulle feile (robusthet)
   const { data: adminRole } = await supabase
     .from('admin_roles')
     .select(`
@@ -58,13 +60,15 @@ export default async function Dashboard(props: {
   const org = roleData?.organization;
   const parentOrg = roleData?.organization?.parent;
 
-  // --- 2. BEREGN RETTIGHETER (RBAC MATRISE) ---
+  // --- 2. BEREGN RETTIGHETER (RBAC) ---
   const permissions = {
       canEditMembers: ['superadmin', 'leader', 'deputy_leader'].includes(userRole),
       canManageEconomy: ['superadmin', 'leader', 'deputy_leader', 'treasurer'].includes(userRole),
       canSendComms: ['superadmin', 'leader', 'deputy_leader'].includes(userRole),
       canManageEvents: ['superadmin', 'leader', 'deputy_leader', 'board_member'].includes(userRole),
-      canManageRoles: ['superadmin', 'leader', 'deputy_leader'].includes(userRole)
+      canManageRoles: ['superadmin', 'leader', 'deputy_leader'].includes(userRole),
+      // Alle i styret (inkludert kasserer og styremedlem) bør ha tilgang til arkivet
+      canViewArchive: ['superadmin', 'leader', 'deputy_leader', 'treasurer', 'board_member'].includes(userRole)
   };
 
   // --- 3. BEREGN GEOGRAFI-LÅSER ---
@@ -133,9 +137,12 @@ export default async function Dashboard(props: {
         </div>
         
         <div className="flex gap-3">
-             <Link href="/bli-medlem">
-                <Button variant="secondary">+ Ny manuell</Button>
-             </Link>
+             {/* Import Button vises kun hvis rettigheter */}
+             {permissions.canEditMembers && (
+                 <Link href="/bli-medlem">
+                    <Button variant="secondary">+ Ny manuell</Button>
+                 </Link>
+             )}
              <form action={signOut}>
                 <Button variant="ghost">Logg ut</Button>
              </form>
@@ -143,7 +150,6 @@ export default async function Dashboard(props: {
       </div>
 
       {/* --- INNHOLD SWITCHER --- */}
-      {/* VERCEL FIX: Pakk inn alt innhold i Suspense for å unngå build-feil */}
       <Suspense fallback={<div className="p-12 text-center text-ps-text/60 bg-white rounded-xl">Laster innhold...</div>}>
       
         {currentTab === 'medlemmer' && (
@@ -181,18 +187,27 @@ export default async function Dashboard(props: {
             <RessursView permissions={permissions} />
         )}
 
+        {/* NY: STYRINGSARKIV */}
+        {currentTab === 'arkiv' && (
+            permissions.canViewArchive 
+              ? <InternArkivView permissions={permissions} />
+              : <AccessDenied />
+        )}
+
         {currentTab === 'innstillinger' && (
             (isSuperAdmin || permissions.canManageRoles) 
               ? <SettingsView />
               : <AccessDenied />
         )}
 
-        {/* Feilmelding hvis man prøver å gå til en fane uten tilgang */}
-        {['okonomi', 'innstillinger', 'ressurser', 'arrangement'].includes(currentTab) && 
+        {/* Feilhåndtering for faner uten tilgang */}
+        {['okonomi', 'innstillinger', 'ressurser', 'arrangement', 'arkiv'].includes(currentTab) && 
          ((currentTab === 'okonomi' && !permissions.canManageEconomy) || 
          (currentTab === 'innstillinger' && !isSuperAdmin && !permissions.canManageRoles) ||
          (currentTab === 'ressurser' && !permissions.canManageEvents) ||
-         (currentTab === 'arrangement' && !permissions.canManageEvents)) && (
+         (currentTab === 'arrangement' && !permissions.canManageEvents) ||
+         (currentTab === 'arkiv' && !permissions.canViewArchive)
+         ) && (
             <AccessDenied />
         )}
       </Suspense> 
@@ -224,9 +239,12 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
   const startRange = (currentPage - 1) * PAGE_SIZE; 
   const endRange = startRange + PAGE_SIZE - 1; 
 
+  // BYGG SPØRRING
   let queryBuilder = supabase.from('member_details_view').select('*', { count: 'exact' });
 
-  if (searchQuery) queryBuilder = queryBuilder.or(`first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
+  if (searchQuery) {
+      queryBuilder = queryBuilder.or(`first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
+  }
   
   if (filters.fylke && filters.fylke !== 'alle') queryBuilder = queryBuilder.eq('fylkeslag_navn', filters.fylke);
   if (filters.lokal && filters.lokal !== 'alle') queryBuilder = queryBuilder.eq('lokallag_navn', filters.lokal);
@@ -243,7 +261,9 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
 
   const { data: pagedMembers, count: totalCount } = await queryBuilder.order('last_name', { ascending: true }).range(startRange, endRange);
 
+  // HENT ALLE ORGANISASJONER
   const { data: allOrgs } = await supabase.from('organizations').select('id, name, level, org_type').order('name');
+
   const fylkeslag = allOrgs?.filter((o:any) => o.level === 'county') || [];
   const lokallag = allOrgs?.filter((o:any) => o.level === 'local') || [];
 
@@ -251,39 +271,59 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
   const totalItems = totalCount || 0;
   const totalPages = Math.ceil(totalItems / PAGE_SIZE);
 
+  // --- HENT TASKS (CRM) ---
+  // Vi henter oppgaver tildelt adminens organisasjon (via RLS eller org-id)
+  // Her henter vi oppgaver der admin har tilgang, begrenset til pending.
+  const { data: tasks } = await supabase
+    .from('tasks')
+    .select('*, member:members(phone, email)')
+    .eq('status', 'pending')
+    .order('due_date', { ascending: true })
+    .limit(5);
+
   const activeFilters = { ...filters, q: searchQuery, vol: volunteerFilter };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 animate-in fade-in duration-300">
         
-        {/* KPI Kort */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <StatsCard title="Totalt i utvalg" count={totalItems} />
-            <StatsCard title="Betalende (PS)" count={memberList.filter((m:any) => m.payment_status_ps === 'active').length} variant="success" />
-            <StatsCard title="Ubetalt (PS)" count={memberList.filter((m:any) => m.payment_status_ps !== 'active').length} variant="danger" />
+        {/* SEKSJON 1: KPI & GRAFIKK */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="space-y-4">
+                <StatsCard title="Totalt i utvalg" count={totalItems} />
+                <StatsCard title="Betalende (PS)" count={memberList.filter((m:any) => m.payment_status_ps === 'active').length} variant="success" />
+                <StatsCard title="Ubetalt (PS)" count={memberList.filter((m:any) => m.payment_status_ps !== 'active').length} variant="danger" />
+            </div>
+
+            <div className="lg:col-span-2 h-full">
+                <GrowthChart />
+            </div>
         </div>
 
-        {/* Filtermeny */}
-        <MemberFilter 
-            fylkeslag={fylkeslag} 
-            lokallag={lokallag} 
-            lockedOrgType={lockedOrgType}
-            lockedFylke={lockedFylke}
-            lockedLokal={lockedLokal}
-        />
+        {/* SEKSJON 2: CRM OPPGAVER */}
+        {tasks && tasks.length > 0 && <TasksWidget tasks={tasks} />}
 
-        {/* Hovedtabell */}
-        <DashboardTable 
-            members={memberList} 
-            totalCount={totalItems}
-            filters={activeFilters}
-            isSuperAdmin={isSuperAdmin}
-            organizations={allOrgs || []} 
-            canEdit={permissions.canEditMembers}
-            canManageRoles={permissions.canManageRoles}
-        />
-        
-        <Pagination currentPage={currentPage} totalPages={totalPages} searchParams={searchParams} />
+        {/* SEKSJON 3: MEDLEMSLISTE */}
+        <div className="space-y-4">
+            <MemberFilter 
+                fylkeslag={fylkeslag} 
+                lokallag={lokallag} 
+                lockedOrgType={lockedOrgType}
+                lockedFylke={lockedFylke}
+                lockedLokal={lockedLokal}
+            />
+
+            <DashboardTable 
+                members={memberList} 
+                totalCount={totalItems}
+                filters={activeFilters}
+                isSuperAdmin={isSuperAdmin}
+                organizations={allOrgs || []} 
+                canEdit={permissions.canEditMembers}
+                canManageRoles={permissions.canManageRoles}
+            />
+            
+            <Pagination currentPage={currentPage} totalPages={totalPages} searchParams={searchParams} />
+        </div>
     </div>
   )
 }

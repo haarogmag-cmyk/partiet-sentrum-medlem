@@ -13,6 +13,7 @@ export default function Sidebar() {
     { id: 'kommunikasjon', label: 'Kommunikasjon', icon: '📢' },
     { id: 'arrangement', label: 'Arrangement & Valg', icon: '📅' },
     { id: 'ressurser', label: 'Ressursbank', icon: '📂' },
+    { id: 'arkiv', label: 'Styringsarkiv', icon: '🔐' },
     { id: 'innstillinger', label: 'Innstillinger', icon: '⚙️' },
   ]
 
