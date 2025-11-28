@@ -14,20 +14,16 @@ export default function EditProfileModal({ member }: Props) {
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   
-  // State for zip/city
+  // State for skjema
   const [zip, setZip] = useState(member.postal_code || '')
-  const [city, setCity] = useState(member.city || '')
   
-  // NYTT: State for visning av lag i sanntid
-  // Vi setter startverdien fra det vi vet om medlemmet (hvis lokallag_navn finnes i viewet)
-  // Men member-objektet her kommer kanskje fra page.tsx uten lokallagsnavnet?
-  // Vi starter med "Laster..." eller tomt, og lar PostalCodeLookup oppdatere det hvis man endrer.
-  const [lokallagNavn, setLokallagNavn] = useState('')
-  const [fylkeslagNavn, setFylkeslagNavn] = useState('')
+  // State for visning (starter med det vi har fra databasen, oppdateres ved søk)
+  const [lokallag, setLokallag] = useState(member.lokallag_navn || 'Ikke tildelt')
+  const [fylkeslag, setFylkeslag] = useState(member.fylkeslag_navn || 'Ikke tildelt')
 
   const handleSubmit = async (formData: FormData) => {
     setLoading(true)
-    formData.set('zip', zip)
+    formData.set('zip', zip) // Sørg for at zip kommer med
     const res = await updateProfile(formData)
     setLoading(false)
 
@@ -36,13 +32,13 @@ export default function EditProfileModal({ member }: Props) {
     } else {
         toast.success('Profil oppdatert!')
         setIsOpen(false)
+        // Valgfritt: window.location.reload() for å oppdatere hovedsiden
     }
   }
 
-  // CSS klasser
   const inputClass = "w-full p-2.5 bg-white border border-ps-primary/20 rounded-lg text-ps-text focus:outline-none focus:ring-2 focus:ring-ps-primary/50 transition-all"
   const labelClass = "block text-xs font-bold uppercase text-ps-text/60 mb-1"
-  const disabledClass = "bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed"
+  const disabledClass = "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
 
   if (!isOpen) {
       return (
@@ -50,70 +46,81 @@ export default function EditProfileModal({ member }: Props) {
             onClick={() => setIsOpen(true)}
             className="text-xs font-bold text-ps-primary hover:underline flex items-center gap-1"
           >
-            ✏️ Rediger
+            ✎ Rediger
           </button>
       )
   }
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
-        <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+        <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             
-            <div className="p-5 border-b border-slate-100 bg-[#fffcf1] flex justify-between items-center">
+            <div className="p-5 border-b border-slate-100 bg-[#fffcf1] flex justify-between items-center shrink-0">
                 <h3 className="font-bold text-[#5e1639]">Rediger mine opplysninger</h3>
                 <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-slate-600">✕</button>
             </div>
 
-            <form action={handleSubmit} className="p-6 space-y-4">
-                
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className={labelClass}>Fornavn</label>
-                        <input disabled value={member.first_name} className={`${inputClass} ${disabledClass}`} />
-                    </div>
-                    <div>
-                        <label className={labelClass}>Etternavn</label>
-                        <input disabled value={member.last_name} className={`${inputClass} ${disabledClass}`} />
-                    </div>
-                </div>
-                
-                <div>
-                    <label className={labelClass}>E-post</label>
-                    <input name="email" type="email" defaultValue={member.email} required className={inputClass} />
-                </div>
-
-                <div>
-                    <label className={labelClass}>Mobilnummer</label>
-                    <input name="phone" type="tel" defaultValue={member.phone} className={inputClass} />
-                </div>
-
-                {/* ADRESSEVELGER MED SANNTIDS-VISNING AV LAG */}
-                <PostalCodeLookup 
-                    initialZip={zip} 
-                    // Vi må oppdatere PostalCodeLookup til å sende tilbake mer info via onChange?
-                    // Eller vi bruker den interne tilstanden i PostalCodeLookup?
-                    // PostalCodeLookup sender (zip, city). Vi må kanskje utvide den for å sende lagnavn også 
-                    // hvis vi vil vise det her.
-                    // MIDLERTIDIG LØSNING: Vi stoler på at PostalCodeLookup viser "✅ [By]"
-                    // og at "Din Tilhørighet"-boksen under oppdateres.
+            <div className="overflow-y-auto p-6">
+                <form action={handleSubmit} className="space-y-5">
                     
-                    // SE ENDRING I components/PostalCodeLookup.tsx under!
-                    onChange={(newZip, newCity) => {
-                        setZip(newZip)
-                        setCity(newCity || '')
-                    }} 
-                />
-                
-                {/* TIPS: PostalCodeLookup har sin egen visning av "Din tilhørighet" innebygd.
-                    Så vi trenger kanskje ikke vise den grønne boksen manuelt her hvis den allerede vises i komponenten?
-                    Men hvis du vil vise den her, må vi løfte staten opp.
-                */}
+                    {/* LÅSTE FELTER */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className={labelClass}>Fornavn</label>
+                            <input disabled value={member.first_name} className={`${inputClass} ${disabledClass}`} />
+                        </div>
+                        <div>
+                            <label className={labelClass}>Etternavn</label>
+                            <input disabled value={member.last_name} className={`${inputClass} ${disabledClass}`} />
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label className={labelClass}>E-post</label>
+                        <input name="email" type="email" defaultValue={member.email} required className={inputClass} />
+                    </div>
 
-                <div className="flex justify-end gap-2 pt-4 mt-2 border-t border-slate-50">
-                    <Button type="button" variant="ghost" onClick={() => setIsOpen(false)}>Avbryt</Button>
-                    <Button type="submit" isLoading={loading}>Lagre endringer</Button>
-                </div>
-            </form>
+                    <div>
+                        <label className={labelClass}>Mobilnummer</label>
+                        <input name="phone" type="tel" defaultValue={member.phone} className={inputClass} />
+                    </div>
+
+                    {/* ADRESSEVELGER */}
+                    <PostalCodeLookup 
+                        initialZip={zip} 
+                        onChange={(newZip, newCity, newLokallag, newFylke) => {
+                            setZip(newZip)
+                            if (newLokallag) setLokallag(newLokallag)
+                            if (newFylke) setFylkeslag(newFylke)
+                            // Hvis zip er ugyldig/slettet, nullstill visning
+                            if (newZip.length !== 4) {
+                                setLokallag('Søker...')
+                                setFylkeslag('Søker...')
+                            }
+                        }} 
+                    />
+
+                    {/* TILHØRIGHET BOKS */}
+                    <div className="bg-[#fffcf1] border border-ps-primary/10 p-4 rounded-xl">
+                        <h4 className="text-xs font-bold uppercase text-ps-primary mb-3">Din nye tilhørighet</h4>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <span className="block text-xs text-slate-400">Lokallag:</span>
+                                <span className="font-bold text-ps-text">{lokallag}</span>
+                            </div>
+                            <div>
+                                <span className="block text-xs text-slate-400">Fylkeslag:</span>
+                                <span className="font-bold text-ps-text">{fylkeslag}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2">
+                        <Button type="button" variant="ghost" onClick={() => setIsOpen(false)}>Avbryt</Button>
+                        <Button type="submit" isLoading={loading}>Lagre endringer</Button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
   )

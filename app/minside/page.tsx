@@ -14,50 +14,31 @@ import GdprControls from './gdpr-controls';
 
 export default async function MinSidePage() {
   const supabase = await createClient();
-
-  // 1. Sjekk login
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  // 2. Hent data om MEG
-  const { data: member } = await supabase
-    .from('member_details_view')
-    .select('*')
-    .eq('id', user.id)
-    .single();
-
+  const { data: member } = await supabase.from('member_details_view').select('*').eq('id', user.id).single();
   if (!member) return <div className="p-10 text-center">Fant ikke medlemsdata.</div>;
 
   const isYouth = member.membership_type?.youth;
 
-  // 3. HENT ORGANISASJONS-IDer
-  // A. Partiet Sentrum
+  // HENT ORGANISASJONS-IDer
   const { data: psFylke } = await supabase.from('organizations').select('id, name').eq('name', `Partiet Sentrum ${member.fylke_navn_raw}`).eq('level', 'county').maybeSingle();
   const { data: psLokal } = await supabase.from('organizations').select('id, name').eq('name', `Partiet Sentrum ${member.kommune_navn_raw}`).eq('level', 'local').maybeSingle();
 
-  // B. Unge Sentrum (Kun hvis ungdom)
-  let usFylke = null;
-  let usLokal = null;
+  let usFylke = null, usLokal = null;
   if (isYouth) {
       const { data: uf } = await supabase.from('organizations').select('name, id').eq('name', `Unge Sentrum ${member.fylke_navn_raw}`).eq('level', 'county').maybeSingle();
       const { data: ul } = await supabase.from('organizations').select('name, id').eq('name', `Unge Sentrum ${member.kommune_navn_raw}`).eq('level', 'local').maybeSingle();
-      usFylke = uf;
-      usLokal = ul;
+      usFylke = uf; usLokal = ul;
   }
 
-  // 4. HENT EVENTS (Kun publiserte)
-  const { data: allEvents } = await supabase
-    .from('events')
-    .select('*')
-    .eq('is_published', true)
-    .order('start_time', { ascending: false });
-
-  // Sorter events i bøtter
+  // Events
+  const { data: allEvents } = await supabase.from('events').select('*').eq('is_published', true).order('start_time', { ascending: false });
   const localEvents = allEvents?.filter((e: any) => [psLokal?.id, usLokal?.id].includes(e.organization_id)) || [];
   const countyEvents = allEvents?.filter((e: any) => [psFylke?.id, usFylke?.id].includes(e.organization_id)) || [];
   const nationalEvents = allEvents?.filter((e: any) => !e.organization_id) || [];
 
-  // Sjekk om brukeren er Admin
   const { data: adminRoles } = await supabase.from('admin_roles').select('role').eq('user_id', user.id);
   const isAdmin = adminRoles && adminRoles.length > 0;
 
@@ -70,35 +51,30 @@ export default async function MinSidePage() {
 
   return (
     <div className="min-h-screen p-4 md:p-8 font-sans bg-background flex flex-col items-center">
-      <div className="w-full max-w-6xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="w-full max-w-7xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
         
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-ps-primary/10 pb-6">
           <div>
             <h1 className="text-3xl font-black tracking-tight text-ps-primary">Hei, {member.first_name}!</h1>
-            <p className="text-sm text-ps-text/60">Velkommen til Min Side</p>
+            <p className="text-sm text-ps-text/60">Min Side</p>
           </div>
-          <div className="flex gap-3 items-center">
-             {isAdmin && (
-                 <Link href="/dashboard">
-                    <Button variant="secondary">Gå til Admin →</Button>
-                 </Link>
-             )}
+          <div className="flex items-center gap-3">
+             {isAdmin && <Link href="/dashboard"><Button variant="secondary">Gå til Admin →</Button></Link>}
              <form action={signOut}><Button variant="ghost" className="text-xs">Logg ut</Button></form>
           </div>
         </div>
 
-        {/* GRID LAYOUT */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* --- NY LAYOUT: 1/3 Venstre, 2/3 Høyre --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
             
-            {/* --- VENSTRE KOLONNE: INFO & KORT --- */}
+            {/* VENSTRE KOLONNE: Kort + Profil */}
             <div className="space-y-8">
                 
-                {/* 1. MEDLEMSKORT */}
+                {/* 1. Medlemskort */}
                 <section className="space-y-4">
-                    <h3 className="text-xs font-bold uppercase text-ps-text/40 tracking-wider">Dine Medlemskap</h3>
+                    <h3 className="text-xs font-bold uppercase text-ps-text/40 tracking-wider">Medlemsbevis</h3>
                     <div className="flex flex-col gap-4">
-                        {/* PS KORT */}
                         <MembershipCard 
                             orgName="Partiet Sentrum" 
                             name={`${member.first_name} ${member.last_name}`} 
@@ -107,7 +83,6 @@ export default async function MinSidePage() {
                             variant="ps"
                             downloadBtn={<DownloadCertificateButton member={member} orgName="Partiet Sentrum" />}
                         />
-                        {/* US KORT */}
                         {isYouth && (
                             <MembershipCard 
                                 orgName="Unge Sentrum" 
@@ -121,7 +96,7 @@ export default async function MinSidePage() {
                     </div>
                 </section>
 
-                {/* 2. PROFIL INFO */}
+                {/* 2. Min Profil */}
                 <Card>
                     <div className="p-4 border-b border-ps-primary/10 bg-[#fffcf1]/50 flex justify-between items-center">
                         <h3 className="font-bold text-[#5e1639]">Min Profil</h3>
@@ -130,21 +105,21 @@ export default async function MinSidePage() {
                     <CardContent className="p-0 text-sm">
                         <InfoRow label="Navn" value={`${member.first_name} ${member.last_name}`} />
                         <InfoRow label="E-post" value={member.email} />
-                        <InfoRow label="Telefon" value={member.phone} />
+                        <InfoRow label="Tlf" value={member.phone} />
                         <InfoRow label="Adresse" value={`${member.postal_code} ${member.city}`} />
                         
-                        <div className="bg-ps-primary/5 p-2 font-bold text-xs uppercase text-ps-text/50 pl-4 mt-2">Tilhørighet</div>
+                        <div className="bg-ps-primary/5 p-2 font-bold text-xs uppercase text-ps-text/50 pl-4">Partiet Sentrum</div>
                         <InfoRow label="Lokallag" value={psLokal?.name || 'Ikke funnet'} />
-                        <InfoRow label="Fylkeslag" value={psFylke?.name || 'Ikke funnet'} />
+                        <InfoRow label="Fylke" value={psFylke?.name || 'Ikke funnet'} />
                     </CardContent>
                 </Card>
 
             </div>
 
-            {/* --- HØYRE KOLONNE (BRED): AKTIVITET --- */}
-            <div className="lg:col-span-2 space-y-8">
+            {/* HØYRE KOLONNE: Arrangementer + Bidra + GDPR */}
+            <div className="lg:col-span-2 space-y-10">
                 
-                {/* 3. ARRANGEMENTER */}
+                {/* 3. Arrangementer */}
                 <div>
                     <div className="flex justify-between items-end border-b border-ps-primary/10 pb-2 mb-6">
                         <div className="flex items-center gap-2">
@@ -154,37 +129,39 @@ export default async function MinSidePage() {
                         <div className="hidden md:block"><CalendarButton /></div>
                     </div>
 
-                    <div className="space-y-6">
-                        {localEvents.length > 0 && (
-                            <section>
-                                <Badge variant="ps" className="mb-3">Ditt Nærmiljø</Badge>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {localEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} />)}
-                                </div>
-                            </section>
-                        )}
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <EventSection title="I Fylket" events={countyEvents} emptyText="Ingen fylkesmøter." />
-                            <EventSection title="Nasjonalt" events={nationalEvents} emptyText="Ingen nasjonale arrangementer." />
-                        </div>
-
-                        {/* Mobil-knapp for kalender */}
-                        <div className="md:hidden mt-4">
+                    <div className="space-y-8">
+                         {/* Lokalt (Vises alltid for å vise at det er tomt hvis ingen møter) */}
+                         <EventSection title="Lokalt" events={localEvents} emptyText={`Ingen møter i ${member.kommune_navn_raw || 'ditt lag'} ennå.`} />
+                         
+                         {/* Fylke & Nasjonalt i grid */}
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                             <EventSection title="I Fylket" events={countyEvents} emptyText="Ingen fylkesmøter." />
+                             <EventSection title="Nasjonalt" events={nationalEvents} emptyText="Ingen nasjonale arrangementer." />
+                         </div>
+                         
+                         {/* Mobil-knapp for kalender */}
+                         <div className="md:hidden mt-4">
                             <CalendarButton />
-                        </div>
+                         </div>
                     </div>
                 </div>
 
-                {/* 4. BUNN-GRID: FRIVILLIG + GDPR */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-8 border-t border-ps-primary/10">
-                    
-                    {/* Frivillig */}
+                {/* 4. Vil du bidra? */}
+                <div>
+                    <div className="flex items-center gap-2 border-b border-ps-primary/10 pb-2 mb-4">
+                        <span className="text-xl">🙋</span>
+                        <h2 className="text-xl font-bold text-ps-text">Vil du bidra?</h2>
+                    </div>
                     <VolunteerCard currentRoles={member.volunteer_roles} />
+                </div>
 
-                    {/* GDPR / Data */}
+                {/* 5. GDPR / Data */}
+                <div>
+                    <div className="flex items-center gap-2 border-b border-ps-primary/10 pb-2 mb-4">
+                        <span className="text-xl">🔐</span>
+                        <h2 className="text-xl font-bold text-ps-text">Medlemskap & Data</h2>
+                    </div>
                     <GdprControls />
-
                 </div>
 
             </div>
@@ -194,8 +171,8 @@ export default async function MinSidePage() {
   );
 }
 
-// --- KOMPONENTER ---
-
+// ... (Behold komponentene MembershipCard, EventCard, EventSection, InfoRow som før) ...
+// Kopier inn komponentene fra forrige svar hvis du erstatter hele filen
 function MembershipCard({ orgName, name, id, status, variant, downloadBtn }: any) {
     const isPaid = status === 'active';
     const bgClass = variant === 'us' 
@@ -259,7 +236,7 @@ function EventCard({ ev }: { ev: any }) {
 function EventSection({ title, events, emptyText }: any) {
     if (!events || events.length === 0) {
         return (
-            <div className="pl-4 border-l-2 border-slate-100 py-2">
+            <div className="pl-4 border-l-2 border-slate-200 py-2">
                 <h3 className="text-xs font-bold uppercase text-slate-300 mb-1">{title}</h3>
                 <p className="text-xs text-slate-400 italic">{emptyText}</p>
             </div>
@@ -268,7 +245,10 @@ function EventSection({ title, events, emptyText }: any) {
     return (
         <div className="space-y-3">
             <h3 className="text-xs font-bold uppercase text-ps-primary ml-1 opacity-80">{title}</h3>
-            {events.map((ev: any) => <EventCard key={ev.id} ev={ev} />)}
+            {/* Hvis mange events, bruk grid. Hvis få, bruk liste. Her bruker vi grid for konsistens. */}
+            <div className="grid grid-cols-1 gap-3"> 
+                {events.map((ev: any) => <EventCard key={ev.id} ev={ev} />)}
+            </div>
         </div>
     )
 }
@@ -276,8 +256,8 @@ function EventSection({ title, events, emptyText }: any) {
 function InfoRow({ label, value }: { label: string, value: string }) {
   return (
     <div className="flex justify-between py-3 px-4 border-b border-slate-50 last:border-0 hover:bg-ps-primary/5 transition-colors">
-      <span className="text-slate-500">{label}</span>
-      <span className="font-medium text-ps-text text-right truncate max-w-[150px]">{value || '-'}</span>
+      <span className="text-sm font-medium text-ps-text/60">{label}</span>
+      <span className="text-sm font-bold text-ps-text text-right">{value || '-'}</span>
     </div>
   )
 }
