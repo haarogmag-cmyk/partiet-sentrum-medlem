@@ -1,9 +1,7 @@
-// app/dashboard/actions/member-actions.ts
-
 'use server';
 
 import { createClient } from '@/utils/supabase/server';
-import { parse } from 'csv-parse/sync'; // Krever npm install csv-parse
+import { parse } from 'csv-parse/sync'; 
 import { revalidatePath } from 'next/cache';
 
 // Define the expected CSV headers (for validation)
@@ -16,13 +14,15 @@ const REQUIRED_HEADERS = [
 ];
 
 export async function importMembersFromCsv(formData: FormData) {
-    // Sjekker om brukeren har tilgang (Admin-sjekk)
-    const supabase = createClient();
+    // VIKTIG RETTELSE HER: Lagt til 'await' før createClient()
+    const supabase = await createClient();
+    
+    // Sjekker om brukeren har tilgang
     const { data: { user } } = await supabase.auth.getUser();
+    
     if (!user) {
         return { success: false, error: 'Du er ikke logget inn.' };
     }
-    // Her bør du legge til sjekk av admin_roles også, men vi antar innlogget = admin for nå.
 
     const file = formData.get('csvFile') as File | null;
     
@@ -95,7 +95,6 @@ export async function importMembersFromCsv(formData: FormData) {
         }
 
         // --- DATABASE INSERT ---
-        // Bruker upsert på e-post for å håndtere oppdatering av eksisterende medlemmer
         const { error: dbError } = await supabase
             .from('members')
             .upsert(importData, { onConflict: 'email', ignoreDuplicates: false })
@@ -106,7 +105,6 @@ export async function importMembersFromCsv(formData: FormData) {
             return { success: false, error: `Databasefeil: ${dbError.message}` };
         }
 
-        // Tvinger Next.js til å oppdatere dashboardet med de nye medlemmene
         revalidatePath('/dashboard');
 
         return { 
