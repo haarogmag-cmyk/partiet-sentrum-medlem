@@ -12,9 +12,9 @@
     "@react-pdf/renderer": "^4.3.1",
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.84.0",
-    "next": "16.0.4",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
+    "next": "^16.0.5",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "resend": "^6.5.2",
     "sonner": "^2.0.7"
   },
