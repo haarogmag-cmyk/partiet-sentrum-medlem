@@ -36,12 +36,12 @@ export default function OkonomiTabsClient({
     return (
         <div className="space-y-6">
             
-            {/* SUB-TAB MENY */}
+            {/* SUB-TAB MENY (Rekkefølge endret) */}
             <div className="flex flex-wrap gap-2 border-b border-ps-primary/10 pb-2">
                 <TabButton active={activeTab === 'oversikt'} onClick={() => setActiveTab('oversikt')} label="Oversikt & Gjeld" icon="📊" />
-                <TabButton active={activeTab === 'rapport'} onClick={() => setActiveTab('rapport')} label="Årsrapport" icon="📈" />
-                <TabButton active={activeTab === 'regnskap'} onClick={() => setActiveTab('regnskap')} label="Regnskap" icon="🧾" />
                 <TabButton active={activeTab === 'budsjett'} onClick={() => setActiveTab('budsjett')} label="Budsjett" icon="📝" />
+                <TabButton active={activeTab === 'regnskap'} onClick={() => setActiveTab('regnskap')} label="Regnskap" icon="🧾" />
+                <TabButton active={activeTab === 'rapport'} onClick={() => setActiveTab('rapport')} label="Årsrapport" icon="📈" />
             </div>
 
             {/* --- FANE 1: OVERSIKT & GJELD --- */}
@@ -111,15 +111,15 @@ export default function OkonomiTabsClient({
                 </div>
             )}
 
-            {/* --- FANE 2: ÅRSRAPPORT --- */}
-            {activeTab === 'rapport' && (
+            {/* --- FANE 2: BUDSJETT --- */}
+            {activeTab === 'budsjett' && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
                     <div className="mb-6">
-                         <h2 className="text-2xl font-bold text-[#5e1639]">Årsrapport {year}</h2>
-                         {currentOrgId ? <p className="text-sm text-slate-500">Viser tall for: <strong>{currentOrgName}</strong></p> : <Badge variant="warning">Velg lag i filteret</Badge>}
+                         <h2 className="text-2xl font-bold text-[#5e1639]">Budsjett {year}</h2>
+                         {currentOrgId ? <p className="text-sm text-slate-500">Planlagte tall for: <strong>{currentOrgName}</strong></p> : <Badge variant="warning">Velg lag i filteret</Badge>}
                     </div>
                     {currentOrgId ? (
-                        <ReportView budget={budgetData} accounting={fullAccounting} />
+                        <BudgetView budgetData={budgetData} orgId={currentOrgId} year={year} />
                     ) : (
                         <EmptyState />
                     )}
@@ -141,15 +141,15 @@ export default function OkonomiTabsClient({
                 </div>
             )}
 
-            {/* --- FANE 4: BUDSJETT --- */}
-            {activeTab === 'budsjett' && (
+            {/* --- FANE 4: ÅRSRAPPORT --- */}
+            {activeTab === 'rapport' && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
                     <div className="mb-6">
-                         <h2 className="text-2xl font-bold text-[#5e1639]">Budsjett {year}</h2>
-                         {currentOrgId ? <p className="text-sm text-slate-500">Planlagte tall for: <strong>{currentOrgName}</strong></p> : <Badge variant="warning">Velg lag i filteret</Badge>}
+                         <h2 className="text-2xl font-bold text-[#5e1639]">Årsrapport {year}</h2>
+                         {currentOrgId ? <p className="text-sm text-slate-500">Viser tall for: <strong>{currentOrgName}</strong></p> : <Badge variant="warning">Velg lag i filteret</Badge>}
                     </div>
                     {currentOrgId ? (
-                        <BudgetView budgetData={budgetData} orgId={currentOrgId} year={year} />
+                        <ReportView budget={budgetData} accounting={fullAccounting} />
                     ) : (
                         <EmptyState />
                     )}
