@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+
+// Undermoduler
 import DownloadCertificateButton from './download-certificate-button';
 import VolunteerCard from './volunteer-card';
 import CalendarButton from './calendar-button';
@@ -12,29 +14,50 @@ import GdprControls from './gdpr-controls';
 
 export default async function MinSidePage() {
   const supabase = await createClient();
+
+  // 1. Sjekk login
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { data: member } = await supabase.from('member_details_view').select('*').eq('id', user.id).single();
+  // 2. Hent data om MEG
+  const { data: member } = await supabase
+    .from('member_details_view')
+    .select('*')
+    .eq('id', user.id)
+    .single();
+
   if (!member) return <div className="p-10 text-center">Fant ikke medlemsdata.</div>;
 
-  // Hent org data
+  const isYouth = member.membership_type?.youth;
+
+  // 3. HENT ORGANISASJONS-IDer
+  // A. Partiet Sentrum
   const { data: psFylke } = await supabase.from('organizations').select('id, name').eq('name', `Partiet Sentrum ${member.fylke_navn_raw}`).eq('level', 'county').maybeSingle();
   const { data: psLokal } = await supabase.from('organizations').select('id, name').eq('name', `Partiet Sentrum ${member.kommune_navn_raw}`).eq('level', 'local').maybeSingle();
 
-  let usFylke = null, usLokal = null;
-  if (member.membership_type?.youth) {
+  // B. Unge Sentrum (Kun hvis ungdom)
+  let usFylke = null;
+  let usLokal = null;
+  if (isYouth) {
       const { data: uf } = await supabase.from('organizations').select('name, id').eq('name', `Unge Sentrum ${member.fylke_navn_raw}`).eq('level', 'county').maybeSingle();
       const { data: ul } = await supabase.from('organizations').select('name, id').eq('name', `Unge Sentrum ${member.kommune_navn_raw}`).eq('level', 'local').maybeSingle();
-      usFylke = uf; usLokal = ul;
+      usFylke = uf;
+      usLokal = ul;
   }
 
-  // Events
-  const { data: allEvents } = await supabase.from('events').select('*').eq('is_published', true).order('start_time', { ascending: false });
+  // 4. HENT EVENTS (Kun publiserte)
+  const { data: allEvents } = await supabase
+    .from('events')
+    .select('*')
+    .eq('is_published', true)
+    .order('start_time', { ascending: false });
+
+  // Sorter events i bøtter
   const localEvents = allEvents?.filter((e: any) => [psLokal?.id, usLokal?.id].includes(e.organization_id)) || [];
   const countyEvents = allEvents?.filter((e: any) => [psFylke?.id, usFylke?.id].includes(e.organization_id)) || [];
   const nationalEvents = allEvents?.filter((e: any) => !e.organization_id) || [];
 
+  // Sjekk om brukeren er Admin
   const { data: adminRoles } = await supabase.from('admin_roles').select('role').eq('user_id', user.id);
   const isAdmin = adminRoles && adminRoles.length > 0;
 
@@ -46,16 +69,16 @@ export default async function MinSidePage() {
   }
 
   return (
-    <div className="min-h-screen p-4 md:p-8 font-sans bg-background">
-      <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in">
+    <div className="min-h-screen p-4 md:p-8 font-sans bg-background flex flex-col items-center">
+      <div className="w-full max-w-6xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
         
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-ps-primary/10 pb-6">
           <div>
             <h1 className="text-3xl font-black tracking-tight text-ps-primary">Hei, {member.first_name}!</h1>
-            <p className="text-sm text-ps-text/60">Velkommen til din medlemsportal</p>
+            <p className="text-sm text-ps-text/60">Velkommen til Min Side</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex gap-3 items-center">
              {isAdmin && (
                  <Link href="/dashboard">
                     <Button variant="secondary">Gå til Admin →</Button>
@@ -65,16 +88,17 @@ export default async function MinSidePage() {
           </div>
         </div>
 
-        {/* GRID LAYOUT (Hovedstrukturen) */}
+        {/* GRID LAYOUT */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
-            {/* KOLONNE 1: Personlig (Kort, Profil, Frivillig) */}
+            {/* --- VENSTRE KOLONNE: INFO & KORT --- */}
             <div className="space-y-8">
                 
-                {/* Medlemskort Slider / Stack */}
+                {/* 1. MEDLEMSKORT */}
                 <section className="space-y-4">
                     <h3 className="text-xs font-bold uppercase text-ps-text/40 tracking-wider">Dine Medlemskap</h3>
                     <div className="flex flex-col gap-4">
+                        {/* PS KORT */}
                         <MembershipCard 
                             orgName="Partiet Sentrum" 
                             name={`${member.first_name} ${member.last_name}`} 
@@ -83,7 +107,8 @@ export default async function MinSidePage() {
                             variant="ps"
                             downloadBtn={<DownloadCertificateButton member={member} orgName="Partiet Sentrum" />}
                         />
-                        {member.membership_type?.youth && (
+                        {/* US KORT */}
+                        {isYouth && (
                             <MembershipCard 
                                 orgName="Unge Sentrum" 
                                 name={`${member.first_name} ${member.last_name}`} 
@@ -96,67 +121,70 @@ export default async function MinSidePage() {
                     </div>
                 </section>
 
-                {/* Mine Opplysninger */}
+                {/* 2. PROFIL INFO */}
                 <Card>
                     <div className="p-4 border-b border-ps-primary/10 bg-[#fffcf1]/50 flex justify-between items-center">
-                        <h3 className="font-bold text-[#5e1639]">Profil</h3>
+                        <h3 className="font-bold text-[#5e1639]">Min Profil</h3>
                         <EditProfileModal member={member} />
                     </div>
                     <CardContent className="p-0 text-sm">
+                        <InfoRow label="Navn" value={`${member.first_name} ${member.last_name}`} />
                         <InfoRow label="E-post" value={member.email} />
-                        <InfoRow label="Tlf" value={member.phone} />
-                        <InfoRow label="Adr" value={`${member.postal_code} ${member.city}`} />
-                        <div className="p-3 bg-slate-50 text-xs text-center text-slate-400 border-t border-slate-100">
-                             {psLokal?.name || 'Ingen lokallag'}
-                        </div>
+                        <InfoRow label="Telefon" value={member.phone} />
+                        <InfoRow label="Adresse" value={`${member.postal_code} ${member.city}`} />
+                        
+                        <div className="bg-ps-primary/5 p-2 font-bold text-xs uppercase text-ps-text/50 pl-4 mt-2">Tilhørighet</div>
+                        <InfoRow label="Lokallag" value={psLokal?.name || 'Ikke funnet'} />
+                        <InfoRow label="Fylkeslag" value={psFylke?.name || 'Ikke funnet'} />
                     </CardContent>
                 </Card>
 
-                {/* Frivillig - Nå som et mindre kort */}
-                <VolunteerCard currentRoles={member.volunteer_roles} />
-
             </div>
 
-            {/* KOLONNE 2 (BRED): Arrangementer & Aktuelt */}
+            {/* --- HØYRE KOLONNE (BRED): AKTIVITET --- */}
             <div className="lg:col-span-2 space-y-8">
                 
-                {/* Arrangementer Header */}
-                <div className="flex justify-between items-end border-b border-ps-primary/10 pb-2">
-                    <div>
-                        <h2 className="text-2xl font-bold text-ps-text">Hva skjer?</h2>
-                        <p className="text-sm text-ps-text/60">Kommende møter og aktiviteter</p>
-                    </div>
-                    <CalendarButton />
-                </div>
-
-                {/* Lokale Møter (Fremhevet) */}
-                {localEvents.length > 0 && (
-                    <section>
-                        <Badge variant="ps" className="mb-3">Ditt Nærmiljø</Badge>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {localEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} />)}
+                {/* 3. ARRANGEMENTER */}
+                <div>
+                    <div className="flex justify-between items-end border-b border-ps-primary/10 pb-2 mb-6">
+                        <div className="flex items-center gap-2">
+                            <span className="text-2xl">📅</span>
+                            <h2 className="text-2xl font-bold text-ps-text">Hva skjer?</h2>
                         </div>
-                    </section>
-                )}
+                        <div className="hidden md:block"><CalendarButton /></div>
+                    </div>
 
-                {/* Fylke & Nasjonalt */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <section className="space-y-3">
-                        <h3 className="text-sm font-bold uppercase text-slate-400">I Fylket</h3>
-                        {countyEvents.length > 0 ? countyEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} compact />) 
-                        : <p className="text-sm text-slate-400 italic">Ingen møter i fylket.</p>}
-                    </section>
-                    
-                    <section className="space-y-3">
-                        <h3 className="text-sm font-bold uppercase text-slate-400">Nasjonalt</h3>
-                        {nationalEvents.length > 0 ? nationalEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} compact />)
-                        : <p className="text-sm text-slate-400 italic">Ingen nasjonale møter.</p>}
-                    </section>
+                    <div className="space-y-6">
+                        {localEvents.length > 0 && (
+                            <section>
+                                <Badge variant="ps" className="mb-3">Ditt Nærmiljø</Badge>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {localEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} />)}
+                                </div>
+                            </section>
+                        )}
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <EventSection title="I Fylket" events={countyEvents} emptyText="Ingen fylkesmøter." />
+                            <EventSection title="Nasjonalt" events={nationalEvents} emptyText="Ingen nasjonale arrangementer." />
+                        </div>
+
+                        {/* Mobil-knapp for kalender */}
+                        <div className="md:hidden mt-4">
+                            <CalendarButton />
+                        </div>
+                    </div>
                 </div>
 
-                {/* GDPR Footer */}
-                <div className="pt-12 mt-12 border-t border-slate-100">
-                     <GdprControls />
+                {/* 4. BUNN-GRID: FRIVILLIG + GDPR */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-8 border-t border-ps-primary/10">
+                    
+                    {/* Frivillig */}
+                    <VolunteerCard currentRoles={member.volunteer_roles} />
+
+                    {/* GDPR / Data */}
+                    <GdprControls />
+
                 </div>
 
             </div>
@@ -166,7 +194,7 @@ export default async function MinSidePage() {
   );
 }
 
-// --- NYE KOMPONENTER FOR DESIGNET ---
+// --- KOMPONENTER ---
 
 function MembershipCard({ orgName, name, id, status, variant, downloadBtn }: any) {
     const isPaid = status === 'active';
@@ -175,12 +203,14 @@ function MembershipCard({ orgName, name, id, status, variant, downloadBtn }: any
         : 'bg-gradient-to-br from-ps-primary to-ps-primary-dark';
 
     return (
-        <div className={`relative rounded-2xl shadow-lg overflow-hidden text-white p-5 flex flex-col justify-between h-48 ${bgClass} group`}>
+        <div className={`relative w-full aspect-[1.58/1] rounded-2xl shadow-xl overflow-hidden text-white p-5 flex flex-col justify-between ${bgClass} group`}>
             <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
             
             <div className="flex justify-between items-start relative z-10">
                 <h2 className="text-lg font-black uppercase tracking-wide">{orgName}</h2>
-                <div className="bg-white/20 px-2 py-0.5 rounded text-[10px] font-bold">{new Date().getFullYear()}</div>
+                <div className="bg-white/20 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-bold border border-white/10">
+                    {new Date().getFullYear()}
+                </div>
             </div>
             
             <div className="relative z-10">
@@ -191,8 +221,7 @@ function MembershipCard({ orgName, name, id, status, variant, downloadBtn }: any
                     <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold bg-white shadow-sm ${isPaid ? 'text-green-700' : 'text-red-600'}`}>
                         {isPaid ? 'GYLDIG' : 'IKKE BETALT'}
                     </span>
-                    {/* Knappen er nå integrert i kortet men mindre synlig */}
-                    <div className="opacity-80 hover:opacity-100 transition-opacity scale-90 origin-right">
+                    <div className="scale-90 origin-right opacity-90 hover:opacity-100 transition-opacity">
                         {downloadBtn}
                     </div>
                 </div>
@@ -201,10 +230,10 @@ function MembershipCard({ orgName, name, id, status, variant, downloadBtn }: any
     )
 }
 
-function EventCard({ ev, compact }: { ev: any, compact?: boolean }) {
+function EventCard({ ev }: { ev: any }) {
     return (
         <Link href={`/minside/event/${ev.id}`} className="block h-full">
-            <Card className="h-full hover:shadow-md transition-all hover:-translate-y-1 border-l-4 border-l-ps-primary">
+            <Card className="h-full hover:shadow-md transition-all hover:-translate-y-1 border-l-4 border-l-ps-primary bg-white">
                 <CardContent className="p-4 flex flex-col justify-between h-full">
                     <div>
                         <div className="flex justify-between items-start mb-2">
@@ -213,12 +242,13 @@ function EventCard({ ev, compact }: { ev: any, compact?: boolean }) {
                             </span>
                             {ev.is_digital && <Badge variant="us">Digitalt</Badge>}
                         </div>
-                        <h4 className={`font-bold text-ps-text ${compact ? 'text-sm' : 'text-lg'}`}>{ev.title}</h4>
-                        {!compact && <p className="text-sm text-slate-500 line-clamp-2 mt-1">{ev.description}</p>}
+                        <h4 className="font-bold text-ps-text text-lg leading-tight">{ev.title}</h4>
+                        <div className="mt-2 text-xs text-slate-500 flex items-center gap-1">
+                            <span>📍</span> {ev.location || 'Nett'}
+                        </div>
                     </div>
-                    <div className="mt-3 pt-3 border-t border-slate-50 flex justify-between items-center text-xs text-slate-400">
-                        <span>📍 {ev.location || 'Nett'}</span>
-                        <span className="font-bold text-ps-primary">Gå til →</span>
+                    <div className="mt-3 pt-3 border-t border-slate-50 flex justify-end">
+                        <span className="text-xs font-bold text-ps-primary">Gå til →</span>
                     </div>
                 </CardContent>
             </Card>
@@ -226,9 +256,26 @@ function EventCard({ ev, compact }: { ev: any, compact?: boolean }) {
     )
 }
 
+function EventSection({ title, events, emptyText }: any) {
+    if (!events || events.length === 0) {
+        return (
+            <div className="pl-4 border-l-2 border-slate-100 py-2">
+                <h3 className="text-xs font-bold uppercase text-slate-300 mb-1">{title}</h3>
+                <p className="text-xs text-slate-400 italic">{emptyText}</p>
+            </div>
+        )
+    }
+    return (
+        <div className="space-y-3">
+            <h3 className="text-xs font-bold uppercase text-ps-primary ml-1 opacity-80">{title}</h3>
+            {events.map((ev: any) => <EventCard key={ev.id} ev={ev} />)}
+        </div>
+    )
+}
+
 function InfoRow({ label, value }: { label: string, value: string }) {
   return (
-    <div className="flex justify-between py-3 px-4 border-b border-slate-50 last:border-0 hover:bg-slate-50">
+    <div className="flex justify-between py-3 px-4 border-b border-slate-50 last:border-0 hover:bg-ps-primary/5 transition-colors">
       <span className="text-slate-500">{label}</span>
       <span className="font-medium text-ps-text text-right truncate max-w-[150px]">{value || '-'}</span>
     </div>

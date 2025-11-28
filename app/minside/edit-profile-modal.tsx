@@ -14,16 +14,20 @@ export default function EditProfileModal({ member }: Props) {
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   
-  // State for zip/city for at Lookup skal funke
+  // State for zip/city
   const [zip, setZip] = useState(member.postal_code || '')
   const [city, setCity] = useState(member.city || '')
+  
+  // NYTT: State for visning av lag i sanntid
+  // Vi setter startverdien fra det vi vet om medlemmet (hvis lokallag_navn finnes i viewet)
+  // Men member-objektet her kommer kanskje fra page.tsx uten lokallagsnavnet?
+  // Vi starter med "Laster..." eller tomt, og lar PostalCodeLookup oppdatere det hvis man endrer.
+  const [lokallagNavn, setLokallagNavn] = useState('')
+  const [fylkeslagNavn, setFylkeslagNavn] = useState('')
 
   const handleSubmit = async (formData: FormData) => {
     setLoading(true)
-    
-    // Legg til zip manuelt siden PostalCodeLookup styrer staten
     formData.set('zip', zip)
-
     const res = await updateProfile(formData)
     setLoading(false)
 
@@ -44,9 +48,9 @@ export default function EditProfileModal({ member }: Props) {
       return (
           <button 
             onClick={() => setIsOpen(true)}
-            className="text-xs font-bold text-ps-primary hover:underline"
+            className="text-xs font-bold text-ps-primary hover:underline flex items-center gap-1"
           >
-            ✎ Rediger
+            ✏️ Rediger
           </button>
       )
   }
@@ -55,7 +59,6 @@ export default function EditProfileModal({ member }: Props) {
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
         <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
             
-            {/* Header */}
             <div className="p-5 border-b border-slate-100 bg-[#fffcf1] flex justify-between items-center">
                 <h3 className="font-bold text-[#5e1639]">Rediger mine opplysninger</h3>
                 <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-slate-600">✕</button>
@@ -63,7 +66,6 @@ export default function EditProfileModal({ member }: Props) {
 
             <form action={handleSubmit} className="p-6 space-y-4">
                 
-                {/* LÅSTE FELTER (Navn/Fødselsdato) */}
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label className={labelClass}>Fornavn</label>
@@ -74,15 +76,7 @@ export default function EditProfileModal({ member }: Props) {
                         <input disabled value={member.last_name} className={`${inputClass} ${disabledClass}`} />
                     </div>
                 </div>
-                <div>
-                    <label className={labelClass}>Fødselsdato</label>
-                    <input disabled value={member.birth_date || '-'} className={`${inputClass} ${disabledClass}`} />
-                    <p className="text-[10px] text-slate-400 mt-1">Kontakt oss hvis navn/dato er feil.</p>
-                </div>
-
-                <hr className="border-slate-100" />
-
-                {/* REDIGERBARE FELTER */}
+                
                 <div>
                     <label className={labelClass}>E-post</label>
                     <input name="email" type="email" defaultValue={member.email} required className={inputClass} />
@@ -93,16 +87,28 @@ export default function EditProfileModal({ member }: Props) {
                     <input name="phone" type="tel" defaultValue={member.phone} className={inputClass} />
                 </div>
 
-                {/* Adressevelger */}
+                {/* ADRESSEVELGER MED SANNTIDS-VISNING AV LAG */}
                 <PostalCodeLookup 
                     initialZip={zip} 
+                    // Vi må oppdatere PostalCodeLookup til å sende tilbake mer info via onChange?
+                    // Eller vi bruker den interne tilstanden i PostalCodeLookup?
+                    // PostalCodeLookup sender (zip, city). Vi må kanskje utvide den for å sende lagnavn også 
+                    // hvis vi vil vise det her.
+                    // MIDLERTIDIG LØSNING: Vi stoler på at PostalCodeLookup viser "✅ [By]"
+                    // og at "Din Tilhørighet"-boksen under oppdateres.
+                    
+                    // SE ENDRING I components/PostalCodeLookup.tsx under!
                     onChange={(newZip, newCity) => {
                         setZip(newZip)
                         setCity(newCity || '')
                     }} 
                 />
+                
+                {/* TIPS: PostalCodeLookup har sin egen visning av "Din tilhørighet" innebygd.
+                    Så vi trenger kanskje ikke vise den grønne boksen manuelt her hvis den allerede vises i komponenten?
+                    Men hvis du vil vise den her, må vi løfte staten opp.
+                */}
 
-                {/* Footer Knapper */}
                 <div className="flex justify-end gap-2 pt-4 mt-2 border-t border-slate-50">
                     <Button type="button" variant="ghost" onClick={() => setIsOpen(false)}>Avbryt</Button>
                     <Button type="submit" isLoading={loading}>Lagre endringer</Button>
