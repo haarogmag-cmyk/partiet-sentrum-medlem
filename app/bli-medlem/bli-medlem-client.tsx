@@ -1,8 +1,11 @@
 'use client'
 
-import { useState, useCallback } from 'react' // Importerte useCallback
-import { signup } from '../login/actions'
+import { useState, useMemo } from 'react'
+import { signup } from '../login/actions' // <--- Server Action importeres her
 import PostalCodeLookup from '@/components/PostalCodeLookup'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { toast } from 'sonner'
 
 const MEMBERSHIPS = [
   { id: 'ordinary_low', title: 'Ordinært medlem (Lav sats)', price: 100, desc: 'Student / Lav inntekt' },
@@ -10,16 +13,18 @@ const MEMBERSHIPS = [
   { id: 'ordinary_high', title: 'Ordinært medlem (Høy sats)', price: 500, desc: 'Støttespiller' },
 ]
 
-export default function BliMedlemClient({ message, error }: { message: string | null, error: string | null }) {
-// Vi bruker de nye propsene direkte:
-// message og error er allerede definert som argumenter.
+interface Props {
+    message: string | null;
+    error: string | null;
+}
+
+export default function BliMedlemClient({ message, error }: Props) {
 
   // --- STATE ---
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState({
     firstName: '', lastName: '', birthDate: '',
-    phone: '', 
-    zip: '', city: '', 
+    phone: '', zip: '', city: '',
     email: '', password: '',
     selectedMembershipId: '' 
   })
@@ -33,35 +38,20 @@ export default function BliMedlemClient({ message, error }: { message: string | 
   const [showTermsModal, setShowTermsModal] = useState<'tillit' | 'personvern' | null>(null)
 
   // --- FUNKSJONER ---
-  const handleChange = (e: any) => {
-    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }))
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
-  // SIKRING MOT EVIG LØKKE: Vi bruker useCallback her
-  const handlePostalCodeChange = useCallback((newZip: string, newCity: string | null) => {
-    setFormData(prev => {
-        // Bare oppdater hvis verdiene faktisk er endret, for å spare rendringer
-        if (prev.zip === newZip && prev.city === (newCity || '')) {
-            return prev
-        }
-        return { 
-            ...prev, 
-            zip: newZip, 
-            city: newCity || '' 
-        }
-    })
-  }, [])
-
-  const handleKeyDown = (e: any) => {
-    if (e.target.tagName === 'BUTTON' || e.target.tagName === 'TEXTAREA') return
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.target instanceof HTMLButtonElement || e.target instanceof HTMLTextAreaElement) return
     if (e.key === 'Enter') {
       e.preventDefault()
-      nextStep()
+      if (step < 4) nextStep()
     }
   }
 
   const nextStep = () => {
-    const currentStepInputs = document.querySelectorAll(`#step-${step} input`)
+    const currentStepInputs = document.querySelectorAll(`#step-${step} input, #step-${step} select`)
     let isValid = true
     
     currentStepInputs.forEach((input: any) => {
@@ -71,15 +61,9 @@ export default function BliMedlemClient({ message, error }: { message: string | 
       }
     })
 
-    if (step === 3) {
-      if (formData.zip.length !== 4 || !formData.city) {
-        // Tillater gå videre hvis zip er 4 siffer selv om city mangler (fallback), 
-        // men gir en advarsel hvis zip er for kort.
-        if (formData.zip.length !== 4) {
-            alert("Du må skrive inn et gyldig postnummer (4 siffer).")
-            isValid = false
-        }
-      }
+    if (step === 3 && (formData.zip.length !== 4 || !formData.city)) {
+        toast.error("Vennligst oppgi et gyldig postnummer.")
+        isValid = false
     }
 
     if (!isValid && step !== 1) return
@@ -115,48 +99,46 @@ export default function BliMedlemClient({ message, error }: { message: string | 
     }
   }
 
-  const getPrice = () => {
+  const getPrice = useMemo(() => {
     const ordinaryPrice = MEMBERSHIPS.find(m => m.id === formData.selectedMembershipId)?.price || 0
     const youthPrice = includeYouth ? 100 : 0
     return ordinaryPrice + youthPrice
-  }
+  }, [formData.selectedMembershipId, includeYouth])
+
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 font-sans text-[#5e1639]" style={{ backgroundColor: '#fffcf1' }} onKeyDown={handleKeyDown}>
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 font-sans text-ps-text bg-background" onKeyDown={handleKeyDown}>
       
       {/* HEADER LOGO */}
       <div className="mb-8 text-center max-w-lg">
-        <h1 className="text-4xl font-extrabold tracking-tight mb-2" style={{ color: '#c93960' }}>
+        <h1 className="text-4xl font-black tracking-tight mb-2 text-ps-primary">
           Partiet Sentrum
         </h1>
-        <p className="text-[#5e1639] opacity-80 font-medium">
+        <p className="text-ps-text opacity-80 font-medium">
           Bli med på laget. Vi trenger deg!
         </p>
       </div>
 
-      <div className="w-full max-w-xl bg-white rounded-2xl shadow-xl border border-[#c93960]/10 overflow-hidden relative">
+      <Card className="w-full max-w-xl relative">
         
         {/* Progress Bar */}
-        <div className="bg-[#fffcf1] h-2 w-full">
+        <div className="bg-ps-primary/10 h-2 w-full">
           <div 
             className="h-2 transition-all duration-500 ease-out"
-            style={{ width: `${(step / 4) * 100}%`, backgroundColor: '#c93960' }}
+            style={{ width: `${(step / 4) * 100}%`, backgroundColor: 'rgb(var(--ps-primary))' }}
           ></div>
         </div>
 
         {/* FEEDBACK */}
-        {message && (
-          <div className="m-6 mb-0 p-4 bg-green-50 text-green-800 rounded-lg text-sm border border-green-100">
-            🎉 {message}
-          </div>
-        )}
-        {error && (
-          <div className="m-6 mb-0 p-4 bg-red-50 text-red-800 rounded-lg text-sm border border-red-100">
-              ⚠️ {error}
+        {(message || error) && (
+          <div className={`m-6 mb-0 p-4 rounded-xl text-sm border ${
+            message ? 'bg-green-50 text-green-800 border-green-200' : 'bg-red-50 text-red-800 border-red-200'
+          }`}>
+            {message ? `🎉 ${message}` : `⚠️ ${error}`}
           </div>
         )}
 
-        <form action={signup} className="p-6 md:p-8">
+        <form action={signup} className="p-6 md:p-8"> 
           
           {/* SKJULTE FELTER */}
           {step === 4 && (
@@ -166,7 +148,6 @@ export default function BliMedlemClient({ message, error }: { message: string | 
               <input type="hidden" name="birthDate" value={formData.birthDate} />
               <input type="hidden" name="phone" value={formData.phone} />
               <input type="hidden" name="zip" value={formData.zip} />
-              <input type="hidden" name="city" value={formData.city} />
               <input type="hidden" name="email" value={formData.email} />
               <input type="hidden" name="password" value={formData.password} />
               <input type="hidden" name="membershipSelection" value={JSON.stringify({
@@ -179,28 +160,27 @@ export default function BliMedlemClient({ message, error }: { message: string | 
           {/* --- STEG 1: VELG TYPE --- */}
           {step === 1 && (
             <div id="step-1" className="animate-in fade-in slide-in-from-right-4 duration-300">
-              <h2 className="text-xl font-bold mb-4" style={{ color: '#5e1639' }}>Velg medlemskap</h2>
+              <h2 className="text-xl font-bold mb-4 text-ps-text">Velg medlemskap</h2>
               <div className="space-y-3">
                 {MEMBERSHIPS.map((m) => (
                   <div 
                     key={m.id}
                     onClick={() => {
-                      setFormData(prev => ({ ...prev, selectedMembershipId: m.id }))
-                      setTimeout(() => setStep(2), 150)
+                      setFormData({ ...formData, selectedMembershipId: m.id })
+                      setTimeout(() => nextStep(), 150)
                     }}
-                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all hover:scale-[1.02] flex justify-between items-center ${
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex justify-between items-center ${
                       formData.selectedMembershipId === m.id 
-                        ? 'bg-[#fffcf1] shadow-sm' 
-                        : 'border-slate-100 hover:border-[#c93960]/30'
+                        ? 'bg-ps-primary/5 shadow-sm border-ps-primary/50' 
+                        : 'border-slate-100 hover:border-ps-primary/30'
                     }`}
-                    style={{ borderColor: formData.selectedMembershipId === m.id ? '#c93960' : undefined }}
                   >
                     <div>
-                      <h3 className="font-bold text-[#5e1639]">{m.title}</h3>
+                      <h3 className="font-bold text-ps-text">{m.title}</h3>
                       <p className="text-xs text-slate-500">{m.desc}</p>
                     </div>
                     <div className="text-right">
-                      <span className="block font-bold text-lg" style={{ color: '#c93960' }}>{m.price},-</span>
+                      <span className="block font-bold text-lg text-ps-primary">{m.price},-</span>
                       <span className="text-[10px] text-slate-400">/ år</span>
                     </div>
                   </div>
@@ -208,21 +188,21 @@ export default function BliMedlemClient({ message, error }: { message: string | 
                 
                 <div 
                     onClick={() => {
-                      setFormData(prev => ({ ...prev, selectedMembershipId: 'youth' }))
-                      setTimeout(() => setStep(2), 150)
+                      setFormData({ ...formData, selectedMembershipId: 'youth' })
+                      setTimeout(() => nextStep(), 150)
                     }}
-                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all hover:scale-[1.02] flex justify-between items-center ${
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex justify-between items-center ${
                       formData.selectedMembershipId === 'youth' 
-                        ? 'bg-green-50 shadow-sm border-green-500' 
-                        : 'border-slate-100 hover:border-green-300'
+                        ? 'bg-us-primary/5 shadow-sm border-us-primary/50' 
+                        : 'border-slate-100 hover:border-us-primary/30'
                     }`}
                   >
                     <div>
-                      <h3 className="font-bold text-[#5e1639]">Medlem Unge Sentrum</h3>
+                      <h3 className="font-bold text-ps-text">Medlem Unge Sentrum</h3>
                       <p className="text-xs text-slate-500">For deg under 30 år</p>
                     </div>
                     <div className="text-right">
-                      <span className="block font-bold text-lg text-green-600">100,-</span>
+                      <span className="block font-bold text-lg text-us-primary">100,-</span>
                       <span className="text-[10px] text-slate-400">/ år</span>
                     </div>
                   </div>
@@ -233,7 +213,7 @@ export default function BliMedlemClient({ message, error }: { message: string | 
           {/* --- STEG 2: PERSONLIA --- */}
           {step === 2 && (
             <div id="step-2" className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-5">
-              <h2 className="text-xl font-bold" style={{ color: '#5e1639' }}>Hvem er du?</h2>
+              <h2 className="text-xl font-bold text-ps-text">Hvem er du?</h2>
               <div className="grid grid-cols-2 gap-4">
                 <InputField label="Fornavn" name="firstName" value={formData.firstName} onChange={handleChange} required />
                 <InputField label="Etternavn" name="lastName" value={formData.lastName} onChange={handleChange} required />
@@ -253,42 +233,46 @@ export default function BliMedlemClient({ message, error }: { message: string | 
           {/* --- STEG 3: KONTAKT --- */}
           {step === 3 && (
             <div id="step-3" className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-5">
-               <h2 className="text-xl font-bold" style={{ color: '#5e1639' }}>Hvor bor du?</h2>
+               <h2 className="text-xl font-bold text-ps-text">Hvor bor du?</h2>
                <div className="space-y-4">
-                  <InputField label="Mobilnummer" name="phone" type="tel" value={formData.phone} onChange={handleChange} required />
-                  
-                  {/* BRUKER CALLBACK HER FOR Å STOPPE LOOP */}
-                  <PostalCodeLookup
-                    initialZip={formData.zip}
-                    onChange={handlePostalCodeChange} 
-                  />
+                 <InputField label="Mobilnummer" name="phone" type="tel" value={formData.phone} onChange={handleChange} required />
+                 
+                 <PostalCodeLookup
+                   initialZip={formData.zip}
+                   onChange={(newZip, newCity) => {
+                     setFormData(prev => ({ 
+                       ...prev, 
+                       zip: newZip, 
+                       city: newCity || '' 
+                     }))
+                   }}
+                 />
 
-                  <div className="border-t border-slate-100 my-2"></div>
-                  <InputField label="E-postadresse" name="email" type="email" value={formData.email} onChange={handleChange} required />
-                  <InputField label="Velg et passord" name="password" type="password" value={formData.password} onChange={handleChange} required />
+                 <div className="border-t border-slate-100 my-2"></div>
+                 <InputField label="E-postadresse" name="email" type="email" value={formData.email} onChange={handleChange} required />
+                 <InputField label="Velg et passord" name="password" type="password" value={formData.password} onChange={handleChange} required />
                </div>
             </div>
           )}
 
-          {/* --- STEG 4: OPPSUMMERING --- */}
+          {/* --- STEG 4: OPPSUMMERING & VILKÅR --- */}
           {step === 4 && (
             <div id="step-4" className="animate-in fade-in slide-in-from-right-4 duration-300">
-               <h2 className="text-xl font-bold mb-2" style={{ color: '#5e1639' }}>Oppsummering</h2>
+               <h2 className="text-xl font-bold mb-2 text-ps-text">Oppsummering</h2>
                
-               <div className="bg-[#fffcf1] p-5 rounded-xl space-y-5 border border-[#c93960]/20 mb-6">
+               <div className="bg-[#fffcf1] p-5 rounded-xl space-y-5 border border-ps-primary/20 mb-6">
                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider mb-2 text-[#5e1639]/70">
+                    <label className="block text-xs font-bold uppercase tracking-wider mb-2 text-ps-text/70">
                       Medlemskap i Partiet Sentrum
                     </label>
                     <select
                       value={formData.selectedMembershipId === 'youth' ? '' : formData.selectedMembershipId}
                       onChange={(e) => setFormData(prev => ({ ...prev, selectedMembershipId: e.target.value }))}
-                      className="w-full p-3 bg-white border border-[#c93960]/30 rounded-lg text-[#5e1639] font-medium outline-none focus:ring-2 focus:ring-[#c93960]"
+                      className="w-full p-3 bg-white border border-ps-primary/30 rounded-lg text-ps-text font-medium outline-none focus:ring-2 focus:ring-ps-primary"
                     >
                       {(formData.selectedMembershipId === 'youth' || formData.selectedMembershipId === '') && (
-                         <option value="">Kun Medlem Unge Sentrum</option>
+                         <option value="">Ingen (Kun Unge Sentrum)</option>
                       )}
-                      
                       {MEMBERSHIPS.map(m => (
                         <option key={m.id} value={m.id}>{m.title} ({m.price} kr)</option>
                       ))}
@@ -296,44 +280,44 @@ export default function BliMedlemClient({ message, error }: { message: string | 
                  </div>
 
                  {isYouthDetected && (
-                   <div className="p-3 bg-white border border-green-200 rounded-lg flex items-start gap-3 shadow-sm">
+                   <div className="p-3 bg-white border border-us-primary/50 rounded-lg flex items-start gap-3 shadow-sm">
                       <input 
                         type="checkbox" 
                         checked={includeYouth}
                         onChange={(e) => setIncludeYouth(e.target.checked)}
-                        className="mt-1 w-5 h-5 accent-green-600 cursor-pointer"
+                        className="mt-1 w-5 h-5 accent-us-primary cursor-pointer"
                       />
                       <div>
-                        <div className="font-bold text-[#5e1639]">Medlem Unge Sentrum</div>
+                        <div className="font-bold text-ps-text">Medlem Unge Sentrum</div>
                         <div className="text-xs text-slate-500">For oss mellom 13 og 30 år (+100 kr).</div>
                       </div>
                    </div>
                  )}
 
-                 <div className="pt-4 border-t border-[#c93960]/10 flex justify-between items-center mt-2">
-                   <span className="font-bold text-[#5e1639]/70">Totalt per år:</span>
-                   <span className="text-2xl font-extrabold" style={{ color: '#c93960' }}>
-                     {getPrice()},-
+                 <div className="pt-4 border-t border-ps-primary/10 flex justify-between items-center mt-2">
+                   <span className="font-bold text-ps-text/70">Totalt per år:</span>
+                   <span className="text-2xl font-extrabold text-ps-primary">
+                     {getPrice},-
                    </span>
                  </div>
                </div>
 
-               {/* VILKÅR */}
+               {/* VILKÅR CHECKBOX */}
                <div className="space-y-3 mb-6">
                  <label className="flex items-start gap-3 cursor-pointer group">
                    <input 
                      type="checkbox" 
                      checked={termsAccepted}
                      onChange={(e) => setTermsAccepted(e.target.checked)}
-                     className="mt-1 w-5 h-5 accent-[#c93960] border-gray-300 rounded focus:ring-[#c93960]"
+                     className="mt-1 w-5 h-5 accent-ps-primary border-gray-300 rounded focus:ring-ps-primary"
                    />
                    <span className="text-sm text-slate-600 leading-relaxed">
                      Jeg bekrefter at jeg har lest og godtar 
-                     <button type="button" onClick={() => setShowTermsModal('tillit')} className="text-[#c93960] hover:underline font-semibold mx-1">
+                     <button type="button" onClick={() => setShowTermsModal('tillit')} className="text-ps-primary hover:underline font-semibold mx-1">
                        Tillitsavtalen
                      </button>
                      og
-                     <button type="button" onClick={() => setShowTermsModal('personvern')} className="text-[#c93960] hover:underline font-semibold mx-1">
+                     <button type="button" onClick={() => setShowTermsModal('personvern')} className="text-ps-primary hover:underline font-semibold mx-1">
                        Personvernerklæringen
                      </button>.
                    </span>
@@ -345,82 +329,84 @@ export default function BliMedlemClient({ message, error }: { message: string | 
           {/* --- NAVIGASJON --- */}
           <div className="mt-8 flex gap-3 pt-4 border-t border-slate-50">
             {step > 1 && (
-              <button 
+              <Button 
                 type="button" 
                 onClick={prevStep}
-                className="px-5 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold hover:bg-slate-50 transition"
+                variant="secondary"
               >
                 Tilbake
-              </button>
+              </Button>
             )}
 
             {step < 4 ? (
-              <button 
+              <Button 
                 type="button" 
                 key="next-btn"
                 disabled={step === 1 && !formData.selectedMembershipId}
                 onClick={nextStep}
-                className="flex-grow text-white px-6 py-3 rounded-xl font-bold transition disabled:opacity-50 hover:shadow-lg"
-                style={{ backgroundColor: '#5e1639' }}
+                className="flex-grow text-white"
               >
                 Gå videre
-              </button>
+              </Button>
             ) : (
-              <button 
+              <Button 
                 type="submit"
                 key="finish-btn"
-                disabled={getPrice() === 0 || !termsAccepted}
-                className="flex-grow text-white px-6 py-3 rounded-xl font-bold transition shadow-lg disabled:opacity-50 disabled:bg-gray-400"
-                style={{ backgroundColor: '#c93960' }}
+                disabled={getPrice === 0 || !termsAccepted}
+                className="flex-grow text-white shadow-lg"
+                variant="primary"
               >
                 Fullfør og betal →
-              </button>
+              </Button>
             )}
           </div>
 
         </form>
-      </div>
+      </Card>
 
-      {/* --- MODAL --- */}
+      {/* --- MODAL FOR VILKÅR --- */}
       {showTermsModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-              <h3 className="text-xl font-bold text-[#5e1639]">
+          <Card className="w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-[#fffcf1]">
+              <h3 className="text-xl font-bold text-ps-text">
                 {showTermsModal === 'tillit' ? 'Tillitsavtale & Vedtekter' : 'Personvernerklæring'}
               </h3>
               <button onClick={() => setShowTermsModal(null)} className="text-slate-400 hover:text-slate-600">✕</button>
             </div>
             
-            <div className="p-6 overflow-y-auto text-sm text-slate-600 leading-relaxed space-y-4">
+            <CardContent className="p-6 overflow-y-auto text-sm text-slate-600 leading-relaxed space-y-4">
               {showTermsModal === 'tillit' ? (
                 <>
                   <p><strong>Tillitsavtale for medlemmer, tillitsvalgte, folkevalgte og ansatte i Partiet Sentrum</strong></p>
-                  <p>Partiet Sentrum er et blokkuavhengig sentrumsparti...</p>
+                  <p>Partiet Sentrum er et blokkuavhengig sentrumsparti. Vi legger FNs bærekraftsmål og Verdenserklæringen om menneskerettigheter av 10.12.1948 til grunn for utforming av all politikk...</p>
+                  <p className="italic text-xs text-slate-400">... Her limer du inn hele teksten fra dokumentet...</p>
+                  <p>Som medlem, tillitsvalgt, folkevalgt og ansatt i Partiet Sentrum forplikter jeg å forholde meg til vedtatte politiske grunnpilarer og mål.</p>
                 </>
               ) : (
                 <>
                   <p><strong>Personvernerklæring for Partiet Sentrum</strong></p>
-                  <p>Vi tar ditt personvern på alvor...</p>
+                  <p>Vi tar ditt personvern på alvor. Som medlem godtar du at vi lagrer informasjonen du gir oss (navn, kontaktinfo, fødselsdato) for å administrere ditt medlemskap.</p>
+                  <p>Dine data deles kun internt med relevante tillitsvalgte (f.eks. ditt lokallagsstyre) og brukes ikke til kommersielle formål.</p>
+                  <p>Du kan når som helst be om innsyn eller sletting ved å kontakte oss.</p>
                 </>
               )}
-            </div>
+            </CardContent>
 
-            <div className="p-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl flex justify-end">
-              <button 
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
+              <Button 
                 onClick={() => {
                   setTermsAccepted(true)
                   setShowTermsModal(null)
                 }}
-                className="bg-[#5e1639] text-white px-6 py-2 rounded-lg font-bold hover:opacity-90 transition"
+                variant="primary"
               >
                 Jeg forstår og godtar
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
-
     </div>
   )
 }
@@ -428,11 +414,11 @@ export default function BliMedlemClient({ message, error }: { message: string | 
 function InputField({ label, helper, ...props }: any) {
   return (
     <div className="group">
-      <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 ml-1 text-[#5e1639]/70">
+      <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 ml-1 text-ps-text/70">
         {label}
       </label>
       <input 
-        className="w-full p-3.5 bg-[#fffcf1] border border-[#c93960]/20 rounded-xl text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#c93960] outline-none transition-all shadow-sm"
+        className="w-full p-3.5 bg-[#fffcf1] border border-ps-primary/20 rounded-xl text-slate-900 focus:bg-white focus:ring-2 focus:ring-ps-primary outline-none transition-all shadow-sm"
         {...props} 
       />
       {helper && <p className="text-xs text-slate-400 mt-1.5 ml-1">{helper}</p>}
