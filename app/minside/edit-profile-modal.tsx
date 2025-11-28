@@ -14,16 +14,15 @@ export default function EditProfileModal({ member }: Props) {
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   
-  // State for skjema
   const [zip, setZip] = useState(member.postal_code || '')
   
-  // State for visning (starter med det vi har fra databasen, oppdateres ved søk)
+  // Vi starter med nåværende verdier
   const [lokallag, setLokallag] = useState(member.lokallag_navn || 'Ikke tildelt')
   const [fylkeslag, setFylkeslag] = useState(member.fylkeslag_navn || 'Ikke tildelt')
 
   const handleSubmit = async (formData: FormData) => {
     setLoading(true)
-    formData.set('zip', zip) // Sørg for at zip kommer med
+    formData.set('zip', zip)
     const res = await updateProfile(formData)
     setLoading(false)
 
@@ -32,13 +31,14 @@ export default function EditProfileModal({ member }: Props) {
     } else {
         toast.success('Profil oppdatert!')
         setIsOpen(false)
-        // Valgfritt: window.location.reload() for å oppdatere hovedsiden
+        // Oppdater siden for å vise endringene i bakgrunnen
+        window.location.reload()
     }
   }
 
   const inputClass = "w-full p-2.5 bg-white border border-ps-primary/20 rounded-lg text-ps-text focus:outline-none focus:ring-2 focus:ring-ps-primary/50 transition-all"
   const labelClass = "block text-xs font-bold uppercase text-ps-text/60 mb-1"
-  const disabledClass = "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
+  const disabledClass = "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
 
   if (!isOpen) {
       return (
@@ -63,7 +63,6 @@ export default function EditProfileModal({ member }: Props) {
             <div className="overflow-y-auto p-6">
                 <form action={handleSubmit} className="space-y-5">
                     
-                    {/* LÅSTE FELTER */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className={labelClass}>Fornavn</label>
@@ -90,10 +89,20 @@ export default function EditProfileModal({ member }: Props) {
                         initialZip={zip} 
                         onChange={(newZip, newCity, newLokallag, newFylke) => {
                             setZip(newZip)
-                            if (newLokallag) setLokallag(newLokallag)
-                            if (newFylke) setFylkeslag(newFylke)
-                            // Hvis zip er ugyldig/slettet, nullstill visning
+                            
+                            // Hvis postnummeret ikke er ferdig skrevet
                             if (newZip.length !== 4) {
+                                setLokallag('...')
+                                setFylkeslag('...')
+                                return
+                            }
+
+                            // Hvis vi har fått et bynavn (API-et har svart)
+                            if (newCity) {
+                                setLokallag(newLokallag || 'Ikke tildelt')
+                                setFylkeslag(newFylke || 'Ikke tildelt')
+                            } else {
+                                // Venter på API-svar
                                 setLokallag('Søker...')
                                 setFylkeslag('Søker...')
                             }
