@@ -34,8 +34,8 @@ export async function lookupPostalCode(zip: string): Promise<PostalCodeData | nu
     const prefix = type === 'ps' ? 'Partiet Sentrum' : 'Unge Sentrum';
     
     // FORSØK 1: Eksakt standardnavn (F.eks "Partiet Sentrum Ås")
-    // Dette løser Ås vs Åsnes problemet, da "Partiet Sentrum Ås" != "Partiet Sentrum Åsnes"
-    let { data } = await supabase
+    // Vi kaller variabelen 'exactMatch' for å unngå navnekollisjon
+    const { data: exactMatch } = await supabase
       .from('organizations')
       .select('name')
       .eq('level', level)
@@ -43,11 +43,11 @@ export async function lookupPostalCode(zip: string): Promise<PostalCodeData | nu
       .eq('name', `${prefix} ${locationName}`) 
       .maybeSingle();
 
-    if (data) return data.name;
+    if (exactMatch) return exactMatch.name;
 
     // FORSØK 2: Starter med navnet (F.eks "Partiet Sentrum Ås Vest")
     // Bruker 'Partiet Sentrum Ås %' for å sikre at vi har et mellomrom etter Ås
-    { data } = await supabase
+    const { data: prefixMatch } = await supabase
       .from('organizations')
       .select('name')
       .eq('level', level)
@@ -56,11 +56,10 @@ export async function lookupPostalCode(zip: string): Promise<PostalCodeData | nu
       .limit(1)
       .maybeSingle();
 
-    if (data) return data.name;
+    if (prefixMatch) return prefixMatch.name;
 
-    // FORSØK 3: Inneholder navnet (Siste utvei, men kan gi feil treff som Åsnes for Ås)
-    // Vi gjør dette kun hvis vi ikke fant noe annet
-    { data } = await supabase
+    // FORSØK 3: Inneholder navnet (Siste utvei)
+    const { data: fuzzyMatch } = await supabase
       .from('organizations')
       .select('name')
       .eq('level', level)
@@ -69,7 +68,7 @@ export async function lookupPostalCode(zip: string): Promise<PostalCodeData | nu
       .limit(1)
       .maybeSingle();
       
-    return data?.name || null;
+    return fuzzyMatch?.name || null;
   }
 
   // --- KJØR SØKENE ---
