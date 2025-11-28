@@ -3,16 +3,14 @@
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-// Markerer medlemskontingent som betalt
-// Vi tar nå imot 'type' for å vite hvilken kolonne vi skal oppdatere
+// --- 1. EKSISTERENDE FUNKSJONER (BETALING & PURRING) ---
+
 export async function markMembershipPaid(userId: string, type: 'ps' | 'us' = 'ps') {
   const supabase = await createClient()
   
-  // Sjekk admin
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Unauthorized')
 
-  // Bestem hvilken kolonne som skal oppdateres basert på type
   const updateData = type === 'us' 
     ? { payment_status_us: 'active' }
     : { payment_status_ps: 'active' }
@@ -28,7 +26,6 @@ export async function markMembershipPaid(userId: string, type: 'ps' | 'us' = 'ps
   return { success: true }
 }
 
-// Markerer arrangementsavgift som betalt
 export async function markEventPaid(eventId: string, userId: string) {
   const supabase = await createClient()
   
@@ -37,7 +34,7 @@ export async function markEventPaid(eventId: string, userId: string) {
 
   const { error } = await supabase
     .from('event_participants')
-    .update({ payment_status: 'paid', has_voting_rights: true }) // Gir ofte stemmerett ved betaling
+    .update({ payment_status: 'paid', has_voting_rights: true })
     .eq('event_id', eventId)
     .eq('user_id', userId)
 
@@ -47,35 +44,90 @@ export async function markEventPaid(eventId: string, userId: string) {
   return { success: true }
 }
 
-// Send påminnelse (Oppdatert til å logge riktig type)
 export async function sendPaymentReminder(type: 'membership' | 'event', userId: string, eventId?: string) {
   const supabase = await createClient()
-  
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Unauthorized')
 
-  // Hent mottakerinfo
-  const { data: member } = await supabase
-    .from('members')
-    .select('email, first_name')
-    .eq('id', userId)
-    .single()
-
+  const { data: member } = await supabase.from('members').select('email, first_name').eq('id', userId).single()
   if (!member) return { error: 'Fant ikke medlemmet' }
 
   let subject = ''
-  
   if (type === 'membership') {
-    subject = 'Påminnelse: Medlemskontingent Partiet Sentrum'
-    // Her oppdaterer vi 'sist purret'. 
-    // I et fullt system kan du utvide DB til å ha 'last_reminder_ps' og 'last_reminder_us'.
+    subject = 'Påminnelse: Medlemskontingent'
     await supabase.from('members').update({ last_reminder_sent_at: new Date().toISOString() }).eq('id', userId)
   } else if (type === 'event') {
     subject = 'Påminnelse: Betaling for arrangement'
   }
 
-  // I produksjon: await sendEmail(...)
   console.log(`📧 SENDER PÅMINNELSE TIL ${member.email}: "${subject}"`)
+  revalidatePath('/dashboard')
+  return { success: true }
+}
+
+// --- 2. NYE FUNKSJONER (BUDSJETT & REGNSKAP) ---
+
+// Lagre en linje i budsjettet (Upsert: Opprett eller Oppdater)
+export async function saveBudgetEntry(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  // Vi antar at RLS sjekker om brukeren har lov til å endre for denne orgId
+  const orgId = formData.get('orgId') as string
+  const year = Number(formData.get('year'))
+  const category = formData.get('category') as string
+  const amount = Number(formData.get('amount'))
+  const type = formData.get('type') as string // 'income' | 'expense'
+
+  const { error } = await supabase
+    .from('budgets')
+    .upsert({ 
+        org_id: orgId, 
+        year, 
+        category, 
+        amount, 
+        type,
+        updated_by: user.id
+    }, { onConflict: 'org_id, year, category' })
+
+  if (error) {
+      console.error('Budget save error:', error)
+      return { error: error.message }
+  }
+
+  revalidatePath('/dashboard')
+  return { success: true }
+}
+
+// Legg til et manuelt bilag i regnskapet
+export async function addAccountEntry(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const orgId = formData.get('orgId') as string
+  const category = formData.get('category') as string
+  const description = formData.get('description') as string
+  let amount = Number(formData.get('amount'))
+  const type = formData.get('type') as string
+
+  // Konvensjon: Utgifter lagres som negative tall i databasen for enklere summering
+  if (type === 'expense') amount = -Math.abs(amount)
+  else amount = Math.abs(amount)
+
+  const { error } = await supabase.from('account_entries').insert({
+      org_id: orgId,
+      category,
+      description,
+      amount,
+      created_by: user.id
+  })
+
+  if (error) {
+      console.error('Account entry error:', error)
+      return { error: error.message }
+  }
 
   revalidatePath('/dashboard')
   return { success: true }
