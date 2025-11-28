@@ -1,13 +1,14 @@
 import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { Suspense } from 'react'; // <--- VIKTIG: Import for å fikse Vercel-feil
 
 // Moduler / Faner
 import OkonomiView from './tabs/okonomi-view';
 import KommunikasjonView from './tabs/kommunikasjon-view';
 import ArrangementView from './tabs/arrangement-view';
 import SettingsView from './tabs/settings-view';
-import RessursView from './tabs/ressurs-view'; // <--- NY IMPORT
+import RessursView from './tabs/ressurs-view'; // Ressursbank
 
 // Komponenter for Medlemslisten
 import MemberFilter from './filter';
@@ -33,6 +34,7 @@ export default async function Dashboard(props: {
   if (!user) redirect('/login');
 
   // --- 1. HENT ADMIN ROLLE & HIERARKI ---
+  // Henter rollen din selv om organisasjons-koblingen skulle feile (robusthet)
   const { data: adminRole } = await supabase
     .from('admin_roles')
     .select(`
@@ -141,55 +143,59 @@ export default async function Dashboard(props: {
       </div>
 
       {/* --- INNHOLD SWITCHER --- */}
+      {/* VERRRRRCEL FIX: Vi pakker inn tab-innholdet i Suspense for å unngå build-feilen */}
+      <Suspense fallback={<div className="p-12 text-center text-ps-text/60">Laster dashbord-innhold...</div>}>
       
-      {currentTab === 'medlemmer' && (
-          <MedlemmerContent 
-              searchParams={searchParams} 
-              supabase={supabase} 
-              filters={dashboardFilters}
-              lockedOrgType={!isSuperAdmin ? myOrgType : null}
-              lockedFylke={lockedFylke}
-              lockedLokal={lockedLokal}
-              isSuperAdmin={isSuperAdmin}
-              permissions={permissions}
-          />
-      )}
+        {currentTab === 'medlemmer' && (
+            <MedlemmerContent 
+                searchParams={searchParams} 
+                supabase={supabase} 
+                filters={dashboardFilters}
+                lockedOrgType={!isSuperAdmin ? myOrgType : null}
+                lockedFylke={lockedFylke}
+                lockedLokal={lockedLokal}
+                isSuperAdmin={isSuperAdmin}
+                permissions={permissions}
+            />
+        )}
 
-      {currentTab === 'okonomi' && permissions.canManageEconomy && (
-          <OkonomiView filters={dashboardFilters} />
-      )}
-      
-      {currentTab === 'kommunikasjon' && (
-          <KommunikasjonView permissions={permissions} />
-      )}
-      
-      {currentTab === 'arrangement' && (
-          <ArrangementView 
-              filters={dashboardFilters} 
-              defaultOrgId={defaultOrgId} 
-              permissions={permissions}
-          />
-      )}
+        {currentTab === 'okonomi' && (
+            permissions.canManageEconomy 
+              ? <OkonomiView filters={dashboardFilters} />
+              : <AccessDenied />
+        )}
+        
+        {currentTab === 'kommunikasjon' && (
+            <KommunikasjonView permissions={permissions} />
+        )}
+        
+        {currentTab === 'arrangement' && (
+            <ArrangementView 
+                filters={dashboardFilters} 
+                defaultOrgId={defaultOrgId} 
+                permissions={permissions}
+            />
+        )}
 
-      {currentTab === 'ressurser' && (
-          <RessursView permissions={permissions} /> // <--- NY RESSURSFANE
-      )}
+        {currentTab === 'ressurser' && (
+            <RessursView permissions={permissions} />
+        )}
 
-      {currentTab === 'innstillinger' && (
-          (isSuperAdmin || permissions.canManageRoles) 
-            ? <SettingsView />
-            : <AccessDenied />
-      )}
+        {currentTab === 'innstillinger' && (
+            (isSuperAdmin || permissions.canManageRoles) 
+              ? <SettingsView />
+              : <AccessDenied />
+        )}
 
-      {/* Feilmelding hvis man prøver å gå til en fane uten tilgang */}
-      {(['okonomi', 'innstillinger'].includes(currentTab) || currentTab === 'ressurser') && 
-       ((currentTab === 'okonomi' && !permissions.canManageEconomy) || 
-       (currentTab === 'innstillinger' && !isSuperAdmin && !permissions.canManageRoles) ||
-       (currentTab === 'ressurser' && !permissions.canManageEvents) // Ressursbank krever ManageEvents for å laste opp
-       ) && (
-          <AccessDenied />
-      )}
-
+        {/* Feilmelding hvis man prøver å gå til en fane uten tilgang */}
+        {['okonomi', 'innstillinger', 'ressurser', 'arrangement'].includes(currentTab) && 
+        ((currentTab === 'okonomi' && !permissions.canManageEconomy) || 
+        (currentTab === 'innstillinger' && !isSuperAdmin && !permissions.canManageRoles) ||
+        (currentTab === 'ressurser' && !permissions.canManageEvents) ||
+        (currentTab === 'arrangement' && !permissions.canManageEvents)) && (
+            <AccessDenied />
+        )}
+      </Suspense> 
     </div>
   );
 }
@@ -213,13 +219,10 @@ function translateRole(role: string) {
 // --- MEDLEM VIEW (Hovedlisten) ---
 async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType, lockedFylke, lockedLokal, isSuperAdmin, permissions }: any) {
   const searchQuery = typeof searchParams.q === 'string' ? searchParams.q : '';
+  const volunteerFilter = typeof searchParams.vol === 'string' ? searchParams.vol : '';
   const currentPage = typeof searchParams.page === 'string' ? parseInt(searchParams.page) : 1;
   const startRange = (currentPage - 1) * PAGE_SIZE; 
   const endRange = startRange + PAGE_SIZE - 1; 
-
-  // Henter frivillig filter fra URL
-  const volunteerFilter = typeof searchParams.vol === 'string' ? searchParams.vol : '';
-
 
   let queryBuilder = supabase.from('member_details_view').select('*', { count: 'exact' });
 
@@ -234,21 +237,13 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
     queryBuilder = queryBuilder.neq('payment_status_ps', 'not_applicable');
   }
 
-  // FRIVILLIG FILTER
   if (volunteerFilter && volunteerFilter !== 'alle') {
       queryBuilder = queryBuilder.contains('volunteer_roles', { [volunteerFilter]: true });
   }
 
-  const { data: pagedMembers, count: totalCount } = await queryBuilder
-    .order('last_name', { ascending: true })
-    .range(startRange, endRange);
+  const { data: pagedMembers, count: totalCount } = await queryBuilder.order('last_name', { ascending: true }).range(startRange, endRange);
 
-  // HENT ALLE ORGANISASJONER (Til både filter og rolle-modal)
-  const { data: allOrgs } = await supabase
-    .from('organizations')
-    .select('id, name, level, org_type')
-    .order('name');
-
+  const { data: allOrgs } = await supabase.from('organizations').select('id, name, level, org_type').order('name');
   const fylkeslag = allOrgs?.filter((o:any) => o.level === 'county') || [];
   const lokallag = allOrgs?.filter((o:any) => o.level === 'local') || [];
 
