@@ -143,8 +143,8 @@ export default async function Dashboard(props: {
       </div>
 
       {/* --- INNHOLD SWITCHER --- */}
-      {/* VERRRRRCEL FIX: Vi pakker inn tab-innholdet i Suspense for å unngå build-feilen */}
-      <Suspense fallback={<div className="p-12 text-center text-ps-text/60">Laster dashbord-innhold...</div>}>
+      {/* VERCEL FIX: Pakk inn alt innhold i Suspense for å unngå build-feil */}
+      <Suspense fallback={<div className="p-12 text-center text-ps-text/60 bg-white rounded-xl">Laster innhold...</div>}>
       
         {currentTab === 'medlemmer' && (
             <MedlemmerContent 
@@ -189,10 +189,10 @@ export default async function Dashboard(props: {
 
         {/* Feilmelding hvis man prøver å gå til en fane uten tilgang */}
         {['okonomi', 'innstillinger', 'ressurser', 'arrangement'].includes(currentTab) && 
-        ((currentTab === 'okonomi' && !permissions.canManageEconomy) || 
-        (currentTab === 'innstillinger' && !isSuperAdmin && !permissions.canManageRoles) ||
-        (currentTab === 'ressurser' && !permissions.canManageEvents) ||
-        (currentTab === 'arrangement' && !permissions.canManageEvents)) && (
+         ((currentTab === 'okonomi' && !permissions.canManageEconomy) || 
+         (currentTab === 'innstillinger' && !isSuperAdmin && !permissions.canManageRoles) ||
+         (currentTab === 'ressurser' && !permissions.canManageEvents) ||
+         (currentTab === 'arrangement' && !permissions.canManageEvents)) && (
             <AccessDenied />
         )}
       </Suspense> 
@@ -256,7 +256,7 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
   return (
     <div className="space-y-6">
         
-        {/* KPI KORT */}
+        {/* KPI Kort */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <StatsCard title="Totalt i utvalg" count={totalItems} />
             <StatsCard title="Betalende (PS)" count={memberList.filter((m:any) => m.payment_status_ps === 'active').length} variant="success" />
