@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 export default async function Home() {
   const supabase = await createClient();
   
-  // 1. Hent alle fylkeslag
+  // 1. Hent fylkeslag
+  // Hvis du vil skjule Svalbard, legg til: .neq('name', 'Partiet Sentrum Svalbard')
   const { data: fylkeslag } = await supabase
     .from('organizations')
     .select('id, name')
@@ -15,7 +16,7 @@ export default async function Home() {
     .eq('org_type', 'ps') 
     .order('name');
 
-  // 2. Hent kommende OFFENTLIGE arrangementer
+  // 2. Hent arrangementer
   const { data: events } = await supabase
     .from('events')
     .select('*')
@@ -30,12 +31,8 @@ export default async function Home() {
       {/* --- HERO SPLIT SCREEN --- */}
       <section className="flex-grow grid grid-cols-1 md:grid-cols-2 min-h-[85vh]">
         
-        {/* VENSTRE: PS (RØD) */}
+        {/* VENSTRE: PARTIET SENTRUM (RØD) */}
         <div className="relative bg-[#c93960] text-white p-10 md:p-20 flex flex-col justify-center items-start overflow-hidden">
-            {/* Dekorativ bakgrunn */}
-            <div className="absolute top-0 left-0 w-full h-full bg-white/5 opacity-10 pattern-dots pointer-events-none"></div>
-            <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
-            
             <div className="relative z-10 max-w-lg animate-in fade-in slide-in-from-left duration-700">
                 <h1 className="text-5xl md:text-7xl font-black tracking-tight mb-6">Partiet Sentrum</h1>
                 <p className="text-xl md:text-2xl opacity-90 font-light mb-10 leading-relaxed">
@@ -44,14 +41,13 @@ export default async function Home() {
                 
                 <div className="flex flex-wrap gap-4">
                     <Link href="/bli-medlem">
-                        {/* Hvit knapp med rød tekst (Kontrastfiks) */}
-                        <Button className="bg-white text-[#c93960] hover:bg-slate-100 py-6 px-8 text-lg font-bold shadow-xl transition-transform hover:scale-105 border-none">
+                        {/* FIKS: Hvit knapp med Rød tekst. Hover: Rød knapp med Hvit tekst. */}
+                        <Button className="bg-white text-[#c93960] font-bold py-6 px-8 text-lg shadow-xl border-2 border-white hover:bg-[#c93960] hover:text-white hover:border-white transition-colors">
                             Bli medlem →
                         </Button>
                     </Link>
                     <Link href="/login">
-                        {/* Gjennomsiktig knapp med hvit kant */}
-                        <Button variant="outline" className="bg-transparent border-2 border-white text-white hover:bg-white/20 py-6 px-8 text-lg font-medium">
+                        <Button variant="outline" className="bg-transparent border-2 border-white text-white hover:bg-white hover:text-[#c93960] py-6 px-8 text-lg font-medium transition-colors">
                             Logg inn
                         </Button>
                     </Link>
@@ -59,12 +55,8 @@ export default async function Home() {
             </div>
         </div>
 
-        {/* HØYRE: US (LILLA) */}
+        {/* HØYRE: UNGE SENTRUM (LILLA) */}
         <div className="relative bg-gradient-to-br from-[#8a63d2] to-[#5e1639] text-white p-10 md:p-20 flex flex-col justify-center items-end text-right overflow-hidden">
-            {/* Dekorativ bakgrunn */}
-            <div className="absolute top-0 right-0 w-full h-full bg-white/5 opacity-10 pattern-dots pointer-events-none"></div>
-            <div className="absolute -top-40 -right-40 w-96 h-96 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
-
             <div className="relative z-10 max-w-lg animate-in fade-in slide-in-from-right duration-700 delay-150">
                 <h1 className="text-5xl md:text-7xl font-black tracking-tight mb-6 text-[#E0CFFC]">Unge Sentrum</h1>
                 <p className="text-xl md:text-2xl opacity-90 font-light mb-10 leading-relaxed text-[#E0CFFC]">
@@ -73,14 +65,13 @@ export default async function Home() {
                 
                 <div className="flex flex-wrap gap-4 justify-end">
                     <Link href="/bli-medlem">
-                        {/* Lys lilla/hvit knapp med mørk lilla tekst (Kontrastfiks) */}
-                        <Button className="bg-[#E0CFFC] text-[#5e1639] hover:bg-white py-6 px-8 text-lg font-bold shadow-xl transition-transform hover:scale-105 border-none">
+                        {/* FIKS: Lys lilla knapp med mørk tekst. Hover: Hvit knapp med lilla tekst. */}
+                        <Button className="bg-[#E0CFFC] text-[#5e1639] font-bold py-6 px-8 text-lg shadow-xl border-2 border-[#E0CFFC] hover:bg-white hover:text-[#5e1639] hover:border-white transition-colors">
                             Bli US-medlem →
                         </Button>
                     </Link>
                     <Link href="/login">
-                        {/* Gjennomsiktig lilla knapp */}
-                        <Button variant="outline" className="bg-transparent border-2 border-[#E0CFFC] text-[#E0CFFC] hover:bg-white/10 py-6 px-8 text-lg font-medium">
+                        <Button variant="outline" className="bg-transparent border-2 border-[#E0CFFC] text-[#E0CFFC] hover:bg-[#E0CFFC] hover:text-[#5e1639] py-6 px-8 text-lg font-medium transition-colors">
                             Logg inn
                         </Button>
                     </Link>
@@ -89,7 +80,7 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* --- KOMMENDE ARRANGEMENTER --- */}
+      {/* --- ARRANGEMENTER --- */}
       {events && events.length > 0 && (
           <section className="py-20 px-4 bg-slate-50">
             <div className="max-w-6xl mx-auto w-full">
@@ -97,12 +88,10 @@ export default async function Home() {
                     <span className="text-3xl">📅</span>
                     <h2 className="text-3xl font-bold text-ps-primary">Det skjer i Sentrum</h2>
                 </div>
-                
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     {events.map((ev: any) => (
                         <Link key={ev.id} href={`/arrangement/${ev.id}`} className="group block h-full">
                             <Card className="h-full hover:shadow-xl transition-all hover:-translate-y-2 border-0 shadow-md overflow-hidden rounded-2xl">
-                                {/* Farget stripe på toppen */}
                                 <div className="h-3 bg-gradient-to-r from-ps-primary to-us-primary w-full"></div>
                                 <CardContent className="p-8 flex flex-col h-full bg-white">
                                     <div className="flex justify-between items-start mb-6">
@@ -115,7 +104,7 @@ export default async function Home() {
                                         {ev.title}
                                     </h3>
                                     <p className="text-slate-500 line-clamp-3 mb-6 flex-grow leading-relaxed">
-                                        {ev.description || 'Se detaljer for mer informasjon...'}
+                                        {ev.description || 'Se detaljer...'}
                                     </p>
                                     <div className="text-sm text-slate-400 font-medium flex items-center gap-2 border-t pt-4">
                                         <span>📍</span> {ev.location || 'Nettbasert'}
@@ -139,7 +128,7 @@ export default async function Home() {
             {fylkeslag?.map((lag: any) => {
                 const shortName = lag.name.replace('Partiet Sentrum ', '');
                 return (
-                    <div key={lag.id} className="p-4 bg-white rounded-2xl shadow-sm border border-slate-100 hover:border-ps-primary/30 hover:shadow-md transition-all text-center cursor-default group">
+                    <div key={lag.id} className="p-4 bg-white rounded-2xl shadow-sm border border-slate-100 hover:border-ps-primary/30 hover:shadow-md transition-all text-center group cursor-default">
                         <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold text-white shadow-sm mx-auto mb-4 transition-transform group-hover:scale-110 bg-ps-primary">
                             {shortName.substring(0, 1)}
                         </div>
@@ -153,18 +142,32 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* FOOTER */}
-      <footer className="py-12 text-center text-slate-500 text-sm bg-slate-100 border-t border-slate-200">
-        <div className="mb-4">
-            <span className="font-black text-xl text-ps-primary">SENTRUM</span>
+      {/* --- FOOTER --- */}
+      <footer className="py-12 bg-slate-100 border-t border-slate-200">
+        <div className="max-w-4xl mx-auto text-center space-y-6">
+            <div>
+                <span className="font-black text-2xl text-ps-primary tracking-tight">PARTIET SENTRUM</span>
+            </div>
+            <p className="text-slate-500 text-sm">Organisasjonsnummer: 925 317 819</p>
+            
+            {/* FIKS: Nye knapper i footeren */}
+            <div className="flex flex-wrap justify-center gap-4 font-medium pt-4">
+                <Link href="/login" className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-ps-primary hover:border-ps-primary transition-colors shadow-sm text-sm font-bold">
+                    Admin
+                </Link>
+                <Link href="/login" className="px-4 py-2 rounded-lg bg-ps-primary text-white hover:bg-ps-primary-dark transition-colors shadow-sm text-sm font-bold">
+                    Logg inn
+                </Link>
+                <Link href="/bli-medlem" className="px-4 py-2 rounded-lg bg-white border border-ps-primary text-ps-primary hover:bg-ps-primary/5 transition-colors shadow-sm text-sm font-bold">
+                    Bli medlem
+                </Link>
+                <a href="https://www.partietsentrum.no" target="_blank" className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-ps-primary hover:border-ps-primary transition-colors shadow-sm text-sm font-bold">
+                    Hovedsiden
+                </a>
+            </div>
+            
+            <p className="pt-8 text-xs text-slate-400">© {new Date().getFullYear()} Partiet Sentrum</p>
         </div>
-        <p>Organisasjonsnummer: 925 317 819</p>
-        <div className="mt-6 flex justify-center gap-6 font-medium">
-            <Link href="/login" className="hover:text-ps-primary transition-colors">Admin Logg inn</Link>
-            <Link href="/bli-medlem" className="hover:text-ps-primary transition-colors">Bli medlem</Link>
-            <a href="https://www.partietsentrum.no" target="_blank" className="hover:text-ps-primary transition-colors">Hovedsiden</a>
-        </div>
-        <p className="mt-8 text-xs opacity-50">© {new Date().getFullYear()} Partiet Sentrum</p>
       </footer>
 
     </main>
