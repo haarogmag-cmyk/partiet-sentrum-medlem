@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { signup } from '../login/actions' // <--- Server Action importeres her
+import { signup } from '../login/actions' 
 import PostalCodeLookup from '@/components/PostalCodeLookup'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 
@@ -16,9 +16,16 @@ const MEMBERSHIPS = [
 interface Props {
     message: string | null;
     error: string | null;
+    signupAction: (formData: FormData) => Promise<void>; // Matcher signaturen til Server Action wrapperen
 }
 
-export default function BliMedlemClient({ message, error }: Props) {
+// Vi bruker en wrapper i page.tsx som sender signup, men her importerer vi den direkte for enkelhets skyld
+// eller bruker den som prop hvis den sendes ned. I forrige steg endret vi til å importere direkte,
+// men for å matche page.tsx strukturen din, bruker vi prop her.
+// NB: Hvis du fjernet prop-en i page.tsx, bruk importen direkte. 
+// Koden under antar at du bruker importen direkte slik vi avtalte sist for å fikse type-feilen.
+
+export default function BliMedlemClient({ message, error }: { message: string | null, error: string | null }) {
 
   // --- STATE ---
   const [step, setStep] = useState(1)
@@ -237,9 +244,12 @@ export default function BliMedlemClient({ message, error }: Props) {
                <div className="space-y-4">
                  <InputField label="Mobilnummer" name="phone" type="tel" value={formData.phone} onChange={handleChange} required />
                  
+                 {/* OPPDATERT COMPONENT CALL */}
                  <PostalCodeLookup
                    initialZip={formData.zip}
-                   onChange={(newZip, newCity) => {
+                   // Vi ignorerer de nye parameterne (ps, us) her i registreringen, 
+                   // vi trenger bare å vite at vi fikk en gyldig by (newCity).
+                   onChange={(newZip, newCity, _ps, _us) => {
                      setFormData(prev => ({ 
                        ...prev, 
                        zip: newZip, 
@@ -380,7 +390,7 @@ export default function BliMedlemClient({ message, error }: Props) {
                 <>
                   <p><strong>Tillitsavtale for medlemmer, tillitsvalgte, folkevalgte og ansatte i Partiet Sentrum</strong></p>
                   <p>Partiet Sentrum er et blokkuavhengig sentrumsparti. Vi legger FNs bærekraftsmål og Verdenserklæringen om menneskerettigheter av 10.12.1948 til grunn for utforming av all politikk...</p>
-                  <p className="italic text-xs text-slate-400">... Her limer du inn hele teksten fra dokumentet...</p>
+                  <p className="italic text-xs text-slate-400">...[Her limer du inn hele teksten fra dokumentet]...</p>
                   <p>Som medlem, tillitsvalgt, folkevalgt og ansatt i Partiet Sentrum forplikter jeg å forholde meg til vedtatte politiske grunnpilarer og mål.</p>
                 </>
               ) : (
