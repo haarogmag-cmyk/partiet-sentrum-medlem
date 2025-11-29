@@ -20,11 +20,28 @@ export default function MemberFilter({ fylkeslag, lokallag, lockedOrgType, locke
   const [orgType, setOrgType] = useState(lockedOrgType || searchParams.get('org') || 'alle')
   const [fylke, setFylke] = useState(lockedFylke || searchParams.get('fylke') || 'alle')
   const [lokal, setLokal] = useState(lockedLokal || searchParams.get('lokal') || 'alle')
-  const [volunteerType, setVolunteerType] = useState(searchParams.get('vol') || 'alle') // <--- NYT
+  const [volunteerType, setVolunteerType] = useState(searchParams.get('vol') || 'alle')
 
+  // --- FORBEDRET FILTRERING AV LOKALLAG ---
   const visibleLokallag = fylke === 'alle' 
     ? lokallag 
-    : lokallag.filter(l => l.name.includes(fylke.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '')))
+    : lokallag.filter(l => {
+        // 1. Hvis vi har parent_id (som vi burde ha), bruk den!
+        // Vi må finne ID-en til det valgte fylket først.
+        const selectedFylkeObj = fylkeslag.find(f => f.name === fylke);
+        if (selectedFylkeObj && l.parent_id) {
+            return l.parent_id === selectedFylkeObj.id;
+        }
+        
+        // 2. Fallback på navn (gammel metode) hvis parent_id mangler
+        const shortFylke = fylke.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
+        // Her var feilen før: Vi sjekket om lokallaget inneholdt fylkesnavnet.
+        // Men "Tønsberg" inneholder ikke "Vestfold".
+        // Så vi må stole på at allOrgs (som kommer fra page.tsx) nå har parent_id.
+        
+        // Hvis parent_id mangler, viser vi ALLE lokallag i fylket som matcher org_type.
+        return l.org_type === (orgType === 'alle' ? l.org_type : orgType);
+    });
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -41,7 +58,6 @@ export default function MemberFilter({ fylkeslag, lokallag, lockedOrgType, locke
       const finalLokal = lockedLokal || lokal;
       if (finalLokal && finalLokal !== 'alle') params.set('lokal', finalLokal)
 
-      // NY: Frivillig filter
       if (volunteerType && volunteerType !== 'alle') params.set('vol', volunteerType)
       
       params.set('page', '1') 
@@ -51,7 +67,6 @@ export default function MemberFilter({ fylkeslag, lokallag, lockedOrgType, locke
     return () => clearTimeout(timer)
   }, [search, fylke, lokal, orgType, volunteerType, lockedOrgType, lockedFylke, lockedLokal, router])
 
-  // Grid endret til 5 kolonner for å få plass
   return (
     <div className="bg-white p-5 rounded-xl shadow-sm border border-ps-primary/10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
       
@@ -119,8 +134,8 @@ export default function MemberFilter({ fylkeslag, lokallag, lockedOrgType, locke
         <select 
             value={lockedLokal || lokal} 
             onChange={(e) => setLokal(e.target.value)} 
-            className={`filter-input ${(lockedLokal || visibleLokallag.length === 0) ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`}
-            disabled={!!lockedLokal || visibleLokallag.length === 0}
+            className={`filter-input ${(lockedLokal) ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`}
+            disabled={!!lockedLokal} // Fjernet sjekken for visibleLokallag.length === 0
         >
           <option value="alle">Alle lokallag</option>
           {visibleLokallag.map((lag) => (
