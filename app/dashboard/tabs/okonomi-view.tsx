@@ -3,9 +3,8 @@ import OkonomiTabsClient from './okonomi-tabs-client'
 
 const MEMBERSHIP_PRICES: any = { 'ordinary_low': 100, 'ordinary_mid': 200, 'ordinary_high': 500 }
 
-// HER DEFINERER VI HVA DENNE FILEN KAN TA IMOT
 interface Props {
-    filters?: {          // <--- Denne må være her for å fikse feilen din
+    filters?: {
         org: string
         fylke: string
         lokal: string
@@ -19,7 +18,7 @@ interface Props {
 export default async function OkonomiView({ filters, searchParams, user, isSuperAdmin, userRole }: Props) {
   const supabase = await createClient()
 
-  // Bestem orgType basert på filteret (PS er default)
+  // Bestem orgType
   let orgType = filters?.org === 'us' ? 'us' : 'ps'; 
   if (isSuperAdmin && searchParams?.eco_org) {
       orgType = searchParams.eco_org;
@@ -30,7 +29,6 @@ export default async function OkonomiView({ filters, searchParams, user, isSuper
       if (orgType === 'us') {
           query = query.contains('membership_type', { youth: true });
       }
-      // Bruk eco-params for superadmin drill-down, ellers filters
       const activeFylke = (isSuperAdmin && searchParams?.eco_fylke) ? searchParams.eco_fylke : filters?.fylke;
       const activeLokal = (isSuperAdmin && searchParams?.eco_lokal) ? searchParams.eco_lokal : filters?.lokal;
 
@@ -62,7 +60,7 @@ export default async function OkonomiView({ filters, searchParams, user, isSuper
   const { data: unpaidParticipants } = await unpaidEventsQuery.limit(50);
 
 
-  // 2. FINN ORGANISASJON (KONTEKST)
+  // 2. FINN KONTEKST
   let currentOrgId = null;
   let currentOrgName = "";
   let currentLevel = 'national';
@@ -96,8 +94,10 @@ export default async function OkonomiView({ filters, searchParams, user, isSuper
       budgetData = b || [];
       const { data: m } = await supabase.from('account_entries').select('*').eq('org_id', currentOrgId);
       manualEntries = m || [];
+      
       const { data: autoMem } = await supabase.from('automatic_income_membership').select('*').eq('org_id', currentOrgId).eq('year', year);
       const { data: autoEvt } = await supabase.from('automatic_income_events').select('*').eq('org_id', currentOrgId).eq('year', year);
+      
       automaticIncome = [...(autoMem || []), ...(autoEvt || [])];
   }
   const fullAccounting = [...manualEntries, ...automaticIncome];
@@ -125,7 +125,7 @@ export default async function OkonomiView({ filters, searchParams, user, isSuper
   const diff = totalExpected - totalActual; 
 
 
-  // 5. HELSE-STATISTIKK (Drill-Down)
+  // 5. HELSE-STATISTIKK
   let healthStats: any[] = [];
   
   if (currentLevel !== 'local') {
@@ -143,12 +143,16 @@ export default async function OkonomiView({ filters, searchParams, user, isSuper
           if (childIds.length > 0) healthQuery = healthQuery.in('org_id', childIds);
           else healthQuery = healthQuery.eq('org_id', '00000000-0000-0000-0000-000000000000'); 
       }
-
       const { data: healthData } = await healthQuery;
       healthStats = healthData || [];
   }
 
-  const { data: allOrgs } = await supabase.from('organizations').select('id, name, level, org_type').order('name');
+  // Hent allOrgs for filteret
+  // VIKTIG RETTELSE: La til 'parent_id' her!
+  const { data: allOrgs } = await supabase
+    .from('organizations')
+    .select('id, name, level, org_type, parent_id') 
+    .order('name');
 
   return (
       <OkonomiTabsClient 
