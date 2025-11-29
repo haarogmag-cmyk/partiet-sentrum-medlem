@@ -14,7 +14,7 @@ interface Props {
 export default async function OkonomiView({ filters }: Props) {
   const supabase = await createClient()
 
-  // Bestem orgType basert på filteret (Superadmin kan bytte)
+  // Bestem orgType basert på filteret (PS er default)
   const orgType = filters?.org === 'us' ? 'us' : 'ps'; 
 
   // --- HJELPEFUNKSJON FOR FILTER ---
@@ -35,7 +35,7 @@ export default async function OkonomiView({ filters }: Props) {
   let unpaidMembersQuery = supabase
     .from('member_details_view')
     .select('*')
-    .neq(orgType === 'us' ? 'payment_status_us' : 'payment_status_ps', 'active'); // Dynamisk kolonnevalg
+    .neq(orgType === 'us' ? 'payment_status_us' : 'payment_status_ps', 'active'); 
   
   unpaidMembersQuery = applyFilters(unpaidMembersQuery);
   const { data: unpaidMembers } = await unpaidMembersQuery.limit(50);
@@ -46,6 +46,8 @@ export default async function OkonomiView({ filters }: Props) {
     .neq('payment_status', 'paid')
     .gt('events.price', 0);
   
+  // For events filtrerer vi også på organisasjonstilhørighet hvis mulig, 
+  // men her bruker vi deltaker-filteret som proxy.
   unpaidEventsQuery = applyFilters(unpaidEventsQuery);
   const { data: unpaidParticipants } = await unpaidEventsQuery.limit(50);
 
@@ -68,7 +70,6 @@ export default async function OkonomiView({ filters }: Props) {
 
       incomeMembershipExpected += price;
       
-      // Sjekk riktig kolonne basert på orgType
       const isPaid = orgType === 'us' ? m.payment_status_us === 'active' : m.payment_status_ps === 'active';
       if (isPaid) {
           incomeMembershipActual += price;
@@ -90,8 +91,7 @@ export default async function OkonomiView({ filters }: Props) {
       const { data } = await supabase.from('organizations').select('id, name').eq('name', filters.fylke).single();
       currentOrgId = data?.id; currentOrgName = data?.name || "";
   } else {
-      const targetName = orgType === 'us' ? 'Unge Sentrum' : 'Partiet Sentrum Nasjonalt'; 
-      // Vi søker etter nasjonalt lag for riktig org_type
+      // Nasjonalt nivå
       const { data } = await supabase.from('organizations').select('id, name').eq('level', 'national').eq('org_type', orgType).maybeSingle();
       if (data) {
           currentOrgId = data.id;
@@ -116,30 +116,30 @@ export default async function OkonomiView({ filters }: Props) {
   }
   const fullAccounting = [...manualEntries, ...automaticIncome];
 
-  // 5. HELSE-STATISTIKK (Vises kun hvis man ser på et overordnet nivå)
-  // Her henter vi helse for ALLE underliggende lag hvis vi ser på nasjonalt/fylke
+  // 5. HELSE-STATISTIKK (FILTRERT!)
   let healthStats: any[] = [];
   
-  // Logikk: Hvis vi er på nasjonalt nivå (ingen fylke valgt), vis fylkeslag.
-  // Hvis vi er på fylkesnivå, vis lokallag.
-  if ((!filters?.fylke || filters.fylke === 'alle')) {
-      // Vis alle fylkeslag for denne org-typen
-      const { data } = await supabase.from('organization_financial_summary').select('*').eq('org_type', orgType).eq('level', 'county');
-      healthStats = data || [];
-  } else if (filters.fylke && (!filters.lokal || filters.lokal === 'alle')) {
-      // Vis lokallag i dette fylket (krever at viewet har en måte å vite fylke på, eller vi filterer på navn)
-      // Enkleste løsning med nåværende view: Filtrer på navn som inneholder fylkesnavnet (minus "Partiet Sentrum ")
-      const shortFylke = filters.fylke.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
-      const { data } = await supabase.from('organization_financial_summary')
-        .select('*')
-        .eq('org_type', orgType)
-        .eq('level', 'local')
-        .ilike('org_name', `%${shortFylke}%`); // Forutsetter at lokallag heter "Partiet Sentrum Ås" og ligger i "Partiet Sentrum Akershus", litt skjørt, men funker ofte.
+  // Vi henter kun helsestatistikk hvis vi ikke står på et lokallag (da ser man jo bare seg selv uansett)
+  if (!filters?.lokal || filters.lokal === 'alle') {
       
-      // Bedre løsning: Bruk parent_id hvis viewet støtter det.
+      let query = supabase
+        .from('organization_financial_summary')
+        .select('*')
+        .eq('org_type', orgType) // <--- HER ER SIKKRINGEN! Kun PS eller US.
+        .order('actual_income', { ascending: false });
+
+      // Hvis vi står på Fylkesnivå, vis kun lokallag i dette fylket
+      if (filters?.fylke && filters.fylke !== 'alle') {
+          const shortFylke = filters.fylke.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
+          query = query.eq('level', 'local').ilike('org_name', `%${shortFylke}%`);
+      } else {
+          // Hvis nasjonalt, vis alle fylkeslag
+          query = query.eq('level', 'county');
+      }
+
+      const { data } = await query;
       healthStats = data || [];
   }
-
 
   return (
       <OkonomiTabsClient 
