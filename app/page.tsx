@@ -47,6 +47,7 @@ export default async function Home() {
                         </Button>
                     </Link>
                     <Link href="/login">
+                        {/* Gjennomsiktig knapp med hvit kant */}
                         <Button variant="outline" className="bg-transparent border-2 border-white text-white hover:bg-white hover:text-[#c93960] py-6 px-8 text-lg font-medium transition-colors">
                             Logg inn
                         </Button>
@@ -152,17 +153,25 @@ export default async function Home() {
             
             {/* FIKS: Nye knapper i footeren */}
             <div className="flex flex-wrap justify-center gap-4 font-medium pt-4">
-                <Link href="/login" className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-ps-primary hover:border-ps-primary transition-colors shadow-sm text-sm font-bold">
-                    Admin
+                <Link href="/login">
+                    <div className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-ps-primary hover:border-ps-primary transition-colors shadow-sm text-sm font-bold cursor-pointer">
+                        Admin
+                    </div>
                 </Link>
-                <Link href="/login" className="px-4 py-2 rounded-lg bg-ps-primary text-white hover:bg-ps-primary-dark transition-colors shadow-sm text-sm font-bold">
-                    Logg inn
+                <Link href="/login">
+                    <div className="px-4 py-2 rounded-lg bg-ps-primary text-white hover:bg-ps-primary-dark transition-colors shadow-sm text-sm font-bold cursor-pointer">
+                        Logg inn
+                    </div>
                 </Link>
-                <Link href="/bli-medlem" className="px-4 py-2 rounded-lg bg-white border border-ps-primary text-ps-primary hover:bg-ps-primary/5 transition-colors shadow-sm text-sm font-bold">
-                    Bli medlem
+                <Link href="/bli-medlem">
+                    <div className="px-4 py-2 rounded-lg bg-white border border-ps-primary text-ps-primary hover:bg-ps-primary/5 transition-colors shadow-sm text-sm font-bold cursor-pointer">
+                        Bli medlem
+                    </div>
                 </Link>
-                <a href="https://www.partietsentrum.no" target="_blank" className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-ps-primary hover:border-ps-primary transition-colors shadow-sm text-sm font-bold">
-                    Hovedsiden
+                <a href="https://www.partietsentrum.no" target="_blank" rel="noopener noreferrer">
+                    <div className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-ps-primary hover:border-ps-primary transition-colors shadow-sm text-sm font-bold cursor-pointer">
+                        Hovedsiden
+                    </div>
                 </a>
             </div>
             
