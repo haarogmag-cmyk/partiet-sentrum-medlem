@@ -53,6 +53,15 @@ export default function EconomyFilter({ allOrgs, isSuperAdmin, activeTab }: Prop
       router.replace(`/dashboard?${params.toString()}`)
   }
 
+    // DEBUGGING:
+    console.log("--- FILTER DEBUG ---")
+    console.log("Selected Fylke:", selectedFylke)
+    console.log("Fylkesobjekt funnet:", fylkeslag.find(f => f.name === selectedFylke))
+    console.log("Antall lokallag funnet:", lokallag.length)
+    if (lokallag.length === 0 && selectedFylke) {
+        console.log("Eksempel på org i allOrgs:", allOrgs[0]) // Sjekk om parent_id er med
+  }
+
   return (
     <div className="bg-white p-4 rounded-xl border border-ps-primary/10 shadow-sm mb-6 flex flex-wrap gap-4 items-center">
         <div className="flex items-center gap-2">
