@@ -2,11 +2,14 @@
 
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 export default function FinancialHealthList({ data, orgType }: { data: any[], orgType: string }) {
   const router = useRouter()
   const searchParams = useSearchParams()
+
+  const currentFylke = searchParams.get('eco_fylke') // Sjekk om vi er inne i et fylke
 
   const list = data.map(d => ({
       ...d,
@@ -15,19 +18,20 @@ export default function FinancialHealthList({ data, orgType }: { data: any[], or
   })).sort((a, b) => b.result - a.result)
 
   const handleRowClick = (orgName: string, level: string) => {
-      // Hvis vi er på lokalt nivå, gjør ingenting
       if (level === 'local') return;
-
       const params = new URLSearchParams(searchParams.toString())
-      
-      // Drill down logic for Economy Tabs
       if (level === 'county') {
           params.set('eco_fylke', orgName)
           params.delete('eco_lokal')
       }
-      
-      // VIKTIG: Vi hopper ikke til en annen fane, men oppdaterer filteret
-      // slik at listen nå viser lokallagene i det fylket.
+      router.replace(`/dashboard?${params.toString()}`)
+  }
+
+  // Funksjon for å gå tilbake (opp)
+  const goUp = () => {
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete('eco_fylke') // Fjern fylke -> Gå til Nasjonalt
+      params.delete('eco_lokal')
       router.replace(`/dashboard?${params.toString()}`)
   }
 
@@ -36,9 +40,18 @@ export default function FinancialHealthList({ data, orgType }: { data: any[], or
         <CardHeader 
             title={`Økonomisk Helse: ${orgType === 'us' ? 'Unge Sentrum' : 'Partiet Sentrum'}`} 
             description="Klikk på et fylke for å se lokallagene." 
+            action={
+                // VIS TILBAKE-KNAPP HVIS VI ER DYPT NEDE
+                currentFylke ? (
+                    <Button variant="outline" size="sm" onClick={goUp}>
+                        ← Tilbake til oversikt
+                    </Button>
+                ) : null
+            }
         />
         <CardContent className="p-0">
             <div className="overflow-x-auto">
+                {/* ... Tabellen er uendret ... */}
                 <table className="w-full text-left text-sm">
                     <thead className="bg-slate-50 text-slate-500 border-b">
                         <tr>
@@ -74,7 +87,7 @@ export default function FinancialHealthList({ data, orgType }: { data: any[], or
                             </tr>
                         ))}
                         {list.length === 0 && (
-                            <tr><td colSpan={5} className="p-6 text-center text-slate-400">Ingen data funnet på dette nivået.</td></tr>
+                            <tr><td colSpan={5} className="p-12 text-center text-slate-400 italic">Ingen data funnet på dette nivået.</td></tr>
                         )}
                     </tbody>
                 </table>
