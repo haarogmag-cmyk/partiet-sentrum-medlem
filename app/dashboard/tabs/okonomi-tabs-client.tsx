@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import MarkPaidButton from './mark-paid-button'
 import SendReminderButton from './send-reminder-button'
 import BudgetView from './budget-view'
@@ -11,6 +12,7 @@ import ReportView from './report-view'
 import FinancialHealthList from './financial-health-list'
 import EconomyFilter from './economy-filter'
 
+// HER ER FIKSEN: Vi legger til de manglende propsene i interfacet
 interface Props {
     totalActual: number
     totalExpected: number
@@ -29,14 +31,16 @@ interface Props {
     allOrgs: any[]
     isSuperAdmin: boolean
     userRole: string
-    // childrenOrgs og currentLevel trengs ikke lenger her for navigasjon,
-    // men EconomyFilter trenger dem kanskje? Nei, den tar allOrgs.
+    
+    // NYE FELTER:
+    childrenOrgs: any[] 
+    currentLevel: string 
 }
 
 export default function OkonomiTabsClient({ 
     totalActual, totalExpected, diff, year, currentOrgId, currentOrgName, 
     budgetData, fullAccounting, manualEntries, automaticIncome, unpaidMembers, unpaidParticipants,
-    healthStats, orgType, allOrgs, isSuperAdmin, userRole
+    healthStats, orgType, allOrgs, isSuperAdmin, userRole, childrenOrgs, currentLevel
 }: Props) {
     
     const [activeTab, setActiveTab] = useState<'oversikt' | 'budsjett' | 'regnskap' | 'rapport' | 'helse'>('oversikt')
