@@ -3,7 +3,6 @@ import OkonomiTabsClient from './okonomi-tabs-client'
 
 const MEMBERSHIP_PRICES: any = { 'ordinary_low': 100, 'ordinary_mid': 200, 'ordinary_high': 500 }
 
-// HER ER ENDRINGEN: Vi legger til de manglende propsene i interface
 interface Props {
     filters?: {
         org: string
@@ -20,7 +19,7 @@ export default async function OkonomiView({ filters, searchParams, user, isSuper
   const supabase = await createClient()
 
   // Bestem orgType basert på filteret (PS er default)
-  // Hvis Superadmin, sjekk URL params 'eco_org' først
+  // Hvis Superadmin, sjekk URL params 'eco_org' først for drill-down kontekst
   let orgType = filters?.org === 'us' ? 'us' : 'ps'; 
   if (isSuperAdmin && searchParams?.eco_org) {
       orgType = searchParams.eco_org;
@@ -44,7 +43,7 @@ export default async function OkonomiView({ filters, searchParams, user, isSuper
       return query;
   }
 
-  // 1. UBETALTE LISTER
+  // 1. UBETALTE LISTER (Gjeldsoversikt)
   let unpaidMembersQuery = supabase
     .from('member_details_view')
     .select('*')
@@ -62,36 +61,8 @@ export default async function OkonomiView({ filters, searchParams, user, isSuper
   unpaidEventsQuery = applyFilters(unpaidEventsQuery);
   const { data: unpaidParticipants } = await unpaidEventsQuery.limit(50);
 
-  // 2. KPI
-  let allMembersQuery = supabase
-    .from('member_details_view')
-    .select('payment_status_ps, payment_status_us, membership_type');
-  
-  allMembersQuery = applyFilters(allMembersQuery);
-  const { data: allMembers } = await allMembersQuery;
 
-  let incomeMembershipExpected = 0
-  let incomeMembershipActual = 0
-  
-  allMembers?.forEach((m: any) => {
-      let price = 200;
-      const type = m.membership_type;
-      if (orgType === 'us') price = 100; 
-      else if (type?.ordinary && MEMBERSHIP_PRICES[type.ordinary]) price = MEMBERSHIP_PRICES[type.ordinary];
-
-      incomeMembershipExpected += price;
-      
-      const isPaid = orgType === 'us' ? m.payment_status_us === 'active' : m.payment_status_ps === 'active';
-      if (isPaid) {
-          incomeMembershipActual += price;
-      }
-  })
-
-  const totalActual = incomeMembershipActual; 
-  const totalExpected = incomeMembershipExpected;
-  const diff = totalExpected - totalActual;
-
-  // 3. FINN ORGANISASJON (KONTEKST)
+  // 2. FINN ORGANISASJON (KONTEKST)
   let currentOrgId = null;
   let currentOrgName = "";
   let currentLevel = 'national';
@@ -116,29 +87,64 @@ export default async function OkonomiView({ filters, searchParams, user, isSuper
       }
   }
 
-  // 4. DATA FOR BUDSJETT/REGNSKAP
+  // 3. HENT DATA FOR BUDSJETT/REGNSKAP
   const year = new Date().getFullYear();
   let budgetData: any[] = [];
   let manualEntries: any[] = [];
   let automaticIncome: any[] = [];
 
   if (currentOrgId) {
+      // Budsjett
       const { data: b } = await supabase.from('budgets').select('*').eq('org_id', currentOrgId).eq('year', year);
       budgetData = b || [];
+      
+      // Manuelle Bilag
       const { data: m } = await supabase.from('account_entries').select('*').eq('org_id', currentOrgId);
       manualEntries = m || [];
+      
+      // Automatiske Inntekter (Fra de nye Views)
       const { data: autoMem } = await supabase.from('automatic_income_membership').select('*').eq('org_id', currentOrgId).eq('year', year);
       const { data: autoEvt } = await supabase.from('automatic_income_events').select('*').eq('org_id', currentOrgId).eq('year', year);
+      
       automaticIncome = [...(autoMem || []), ...(autoEvt || [])];
   }
   const fullAccounting = [...manualEntries, ...automaticIncome];
 
-  // 5. HELSE-STATISTIKK (Med Drill-Down)
+
+  // 4. KPI BEREGNINGER (Sannhet fra Regnskap)
+  
+  // FAKTISK INNTEKT: Hentes nå fra regnskapet (fullAccounting) i stedet for å telle medlemmer på nytt.
+  // Dette sikrer at tallene matcher 100% mellom Oversikt og Regnskap-fanen.
+  const totalActual = fullAccounting
+    .filter(entry => entry.type === 'income') // Summer alle inntekter (både auto og manuelle)
+    .reduce((sum, entry) => sum + (entry.amount || 0), 0);
+
+  // FORVENTET INNTEKT (Estimat): Må fortsatt beregnes basert på medlemslisten (potensialet)
+  // Vi henter alle medlemmer i utvalget for å beregne hva vi "burde" ha fått inn.
+  let allMembersQuery = supabase.from('member_details_view').select('payment_status_ps, payment_status_us, membership_type');
+  allMembersQuery = applyFilters(allMembersQuery);
+  const { data: allMembers } = await allMembersQuery;
+
+  let incomeMembershipExpected = 0;
+  allMembers?.forEach((m: any) => {
+      let price = 200;
+      const type = m.membership_type;
+      if (orgType === 'us') price = 100; 
+      else if (type?.ordinary && MEMBERSHIP_PRICES[type.ordinary]) price = MEMBERSHIP_PRICES[type.ordinary];
+      incomeMembershipExpected += price;
+  });
+  
+  // Legg gjerne til budsjetterte andre inntekter i forventet total hvis ønskelig
+  // const budgetIncomeTotal = budgetData.filter(b => b.type === 'income').reduce((sum, b) => sum + b.amount, 0);
+  const totalExpected = incomeMembershipExpected; 
+
+  const diff = totalExpected - totalActual; // (Negativt tall betyr at vi har fått inn mer enn forventet, eller vi kan vise 0)
+
+
+  // 5. HELSE-STATISTIKK (Drill-Down)
   let healthStats: any[] = [];
   
-  // Vi viser kun helse-statistikk hvis vi ikke er på bunnivå (lokal)
   if (currentLevel !== 'local') {
-    
       let healthQuery = supabase
           .from('organization_financial_summary')
           .select('*')
@@ -146,23 +152,19 @@ export default async function OkonomiView({ filters, searchParams, user, isSuper
           .order('actual_income', { ascending: false });
 
       if (currentLevel === 'national') {
-          // Vis alle FYLKESLAG
           healthQuery = healthQuery.eq('level', 'county');
       } else if (currentLevel === 'county') {
-          // Vis alle LOKALLAG under dette fylket
           const { data: childOrgs } = await supabase.from('organizations').select('id').eq('parent_id', currentOrgId); 
           const childIds = childOrgs?.map(o => o.id) || [];
-          
           if (childIds.length > 0) healthQuery = healthQuery.in('org_id', childIds);
           else healthQuery = healthQuery.eq('org_id', '00000000-0000-0000-0000-000000000000'); 
       }
-
       const { data: healthData } = await healthQuery;
       healthStats = healthData || [];
   }
 
-  // Hent allOrgs for filteret i klienten
-  const { data: allOrgs } = await supabase.from('organizations').select('id, name, level, org_type, parent_id').order('name');
+  // Hent allOrgs for filteret
+  const { data: allOrgs } = await supabase.from('organizations').select('id, name, level, org_type').order('name');
 
   return (
       <OkonomiTabsClient 
