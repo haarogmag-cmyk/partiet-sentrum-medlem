@@ -286,7 +286,7 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
   // HENT ALLE ORGANISASJONER (Til både filter og rolle-modal)
   const { data: allOrgs } = await supabase
     .from('organizations')
-    .select('id, name, level, org_type, parent_id') // parent_id er viktig for filteret
+    .select('id, name, level, org_type, parent_id') // <--- VIKTIG: parent_id MÅ være her!
     .order('name');
 
   const fylkeslag = allOrgs?.filter((o:any) => o.level === 'county') || [];
