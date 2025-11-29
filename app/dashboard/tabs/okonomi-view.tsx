@@ -4,125 +4,153 @@ import OkonomiTabsClient from './okonomi-tabs-client'
 const MEMBERSHIP_PRICES: any = { 'ordinary_low': 100, 'ordinary_mid': 200, 'ordinary_high': 500 }
 
 interface Props {
-    filters?: any // Vi bruker searchParams direkte inni her nå for custom eco-params
+    filters?: {
+        org: string
+        fylke: string
+        lokal: string
+    }
+    // NYE PROPS SOM DASHBOARD SENDER:
     searchParams: any
     user: any
+    isSuperAdmin: boolean
+    userRole: string
 }
 
-export default async function OkonomiView({ searchParams, user }: Props) {
+export default async function OkonomiView({ filters, searchParams, user, isSuperAdmin, userRole }: Props) {
   const supabase = await createClient()
 
-  // --- 1. HENT USER ROLE & ORG (For sikkerhet) ---
-  const { data: adminRole } = await supabase
-    .from('admin_roles')
-    .select('role, org_sub_type, organization:organizations(id, name, level, org_type)')
-    .eq('user_id', user.id)
-    .single()
+  // Bestem orgType basert på filteret
+  const orgType = filters?.org === 'us' ? 'us' : 'ps'; 
+
+  const applyFilters = (query: any) => {
+      if (orgType === 'us') {
+          query = query.contains('membership_type', { youth: true });
+      }
+      if (filters?.fylke && filters.fylke !== 'alle') {
+          query = query.eq('fylkeslag_navn', filters.fylke);
+      }
+      if (filters?.lokal && filters.lokal !== 'alle') {
+          query = query.eq('lokallag_navn', filters.lokal);
+      }
+      return query;
+  }
+
+  // 1. UBETALTE LISTER
+  let unpaidMembersQuery = supabase
+    .from('member_details_view')
+    .select('*')
+    .neq(orgType === 'us' ? 'payment_status_us' : 'payment_status_ps', 'active'); 
   
-  const roleData = adminRole as any;
-  const isSuperAdmin = roleData?.role === 'superadmin';
-  const myOrg = roleData?.organization;
+  unpaidMembersQuery = applyFilters(unpaidMembersQuery);
+  const { data: unpaidMembers } = await unpaidMembersQuery.limit(50);
 
-  // --- 2. BESTEM KONTEKST (Hvilken org ser vi på?) ---
+  let unpaidEventsQuery = supabase
+    .from('event_participants_details')
+    .select('*, events(title, price)')
+    .neq('payment_status', 'paid')
+    .gt('events.price', 0);
   
-  // Default verdier
-  let orgType = isSuperAdmin ? 'ps' : (roleData?.org_sub_type || 'ps');
-  let targetOrgId = isSuperAdmin ? null : myOrg?.id;
-  let targetOrgName = isSuperAdmin ? 'Partiet Sentrum Nasjonalt' : myOrg?.name;
-  let currentLevel = isSuperAdmin ? 'national' : myOrg?.level;
+  unpaidEventsQuery = applyFilters(unpaidEventsQuery);
+  const { data: unpaidParticipants } = await unpaidEventsQuery.limit(50);
 
-  // Hvis Superadmin: Les fra URL (eco_org, eco_fylke, eco_lokal)
-  if (isSuperAdmin) {
-      const urlOrg = searchParams.eco_org;
-      const urlFylke = searchParams.eco_fylke;
-      const urlLokal = searchParams.eco_lokal;
+  // 2. KPI
+  let allMembersQuery = supabase
+    .from('member_details_view')
+    .select('payment_status_ps, payment_status_us, membership_type');
+  
+  allMembersQuery = applyFilters(allMembersQuery);
+  const { data: allMembers } = await allMembersQuery;
 
-      if (urlOrg) orgType = urlOrg; // Bytt mellom PS/US
+  let incomeMembershipExpected = 0
+  let incomeMembershipActual = 0
+  
+  allMembers?.forEach((m: any) => {
+      let price = 200;
+      const type = m.membership_type;
+      if (orgType === 'us') price = 100; 
+      else if (type?.ordinary && MEMBERSHIP_PRICES[type.ordinary]) price = MEMBERSHIP_PRICES[type.ordinary];
 
-      if (urlLokal) {
-          const { data } = await supabase.from('organizations').select('id, name').eq('name', urlLokal).single();
-          targetOrgId = data?.id; targetOrgName = data?.name; currentLevel = 'local';
-      } else if (urlFylke) {
-          const { data } = await supabase.from('organizations').select('id, name').eq('name', urlFylke).single();
-          targetOrgId = data?.id; targetOrgName = data?.name; currentLevel = 'county';
-      } else {
-          // Nasjonalt nivå
-          const { data } = await supabase.from('organizations').select('id, name').eq('level', 'national').eq('org_type', orgType).maybeSingle();
-          targetOrgId = data?.id; targetOrgName = data?.name; currentLevel = 'national';
+      incomeMembershipExpected += price;
+      
+      const isPaid = orgType === 'us' ? m.payment_status_us === 'active' : m.payment_status_ps === 'active';
+      if (isPaid) {
+          incomeMembershipActual += price;
+      }
+  })
+
+  const totalActual = incomeMembershipActual; 
+  const totalExpected = incomeMembershipExpected;
+  const diff = totalExpected - totalActual;
+
+  // 3. FINN ORGANISASJON (KONTEKST)
+  let currentOrgId = null;
+  let currentOrgName = "";
+  let currentLevel = 'national';
+
+  if (filters?.lokal && filters.lokal !== 'alle') {
+      const { data } = await supabase.from('organizations').select('id, name').eq('name', filters.lokal).single();
+      currentOrgId = data?.id; currentOrgName = data?.name || ""; currentLevel = 'local';
+  } else if (filters?.fylke && filters.fylke !== 'alle') {
+      const { data } = await supabase.from('organizations').select('id, name').eq('name', filters.fylke).single();
+      currentOrgId = data?.id; currentOrgName = data?.name || ""; currentLevel = 'county';
+  } else {
+      const targetType = filters?.org === 'us' ? 'us' : 'ps'; 
+      const { data } = await supabase.from('organizations').select('id, name').eq('level', 'national').eq('org_type', targetType).maybeSingle();
+      if (data) {
+          currentOrgId = data.id;
+          currentOrgName = data.name;
+          currentLevel = 'national';
       }
   }
 
-  // --- 3. HENT DATA (Basert på targetOrgId) ---
+  // 4. DATA FOR BUDSJETT/REGNSKAP
   const year = new Date().getFullYear();
   let budgetData: any[] = [];
   let manualEntries: any[] = [];
   let automaticIncome: any[] = [];
 
-  if (targetOrgId) {
-      const { data: b } = await supabase.from('budgets').select('*').eq('org_id', targetOrgId).eq('year', year);
+  if (currentOrgId) {
+      const { data: b } = await supabase.from('budgets').select('*').eq('org_id', currentOrgId).eq('year', year);
       budgetData = b || [];
-      const { data: m } = await supabase.from('account_entries').select('*').eq('org_id', targetOrgId);
+      const { data: m } = await supabase.from('account_entries').select('*').eq('org_id', currentOrgId);
       manualEntries = m || [];
-      const { data: autoMem } = await supabase.from('automatic_income_membership').select('*').eq('org_id', targetOrgId).eq('year', year);
-      const { data: autoEvt } = await supabase.from('automatic_income_events').select('*').eq('org_id', targetOrgId).eq('year', year);
+      const { data: autoMem } = await supabase.from('automatic_income_membership').select('*').eq('org_id', currentOrgId).eq('year', year);
+      const { data: autoEvt } = await supabase.from('automatic_income_events').select('*').eq('org_id', currentOrgId).eq('year', year);
       automaticIncome = [...(autoMem || []), ...(autoEvt || [])];
   }
   const fullAccounting = [...manualEntries, ...automaticIncome];
 
+  // 5. HENT DATA FOR NAVIGASJON OG HELSE
+  // Vi henter allOrgs her for å sende til filteret i klienten
+  const { data: allOrgs } = await supabase.from('organizations').select('id, name, level, org_type').order('name');
 
-  // --- 4. HENT OVERSIKTS-LISTER (Ubetalt) ---
-  // Dette gjelder kun for "Oversikt"-fanen. Superadmin ser Nasjonalt per default.
-  // Hvis vi har drillet ned, kunne vi vist lokalt, men kravet var "Hele organisasjonen" i oversikt.
-  
-  // For enkelhets skyld i denne versjonen: 
-  // Hvis Superadmin: Vis ALLE ubetalte i hele org_type (PS eller US).
-  // Hvis Leder: Vis kun mitt lag.
-  
-  let unpaidMembersQuery = supabase.from('member_details_view').select('*').neq(orgType === 'us' ? 'payment_status_us' : 'payment_status_ps', 'active');
-  
-  if (!isSuperAdmin) {
-      // Filtrer for ledere (via geografi/navn matching som før, eller org_id hvis vi hadde det direkte i viewet)
-      if (myOrg?.level === 'county') unpaidMembersQuery = unpaidMembersQuery.eq('fylkeslag_navn', myOrg.name);
-      if (myOrg?.level === 'local') unpaidMembersQuery = unpaidMembersQuery.eq('lokallag_navn', myOrg.name);
-  } else {
-      // Superadmin ser hele landet, men kan filtrere hvis drillet ned
-      if (currentLevel === 'county') unpaidMembersQuery = unpaidMembersQuery.eq('fylkeslag_navn', targetOrgName);
-      if (currentLevel === 'local') unpaidMembersQuery = unpaidMembersQuery.eq('lokallag_navn', targetOrgName);
+  // Hent "Barn" (Drill-down)
+  let childrenOrgs: any[] = [];
+  if (currentLevel === 'national') {
+      childrenOrgs = allOrgs?.filter((o:any) => o.level === 'county' && o.org_type === orgType) || [];
+  } else if (currentLevel === 'county' && currentOrgId) {
+      // Vi må gjøre et nytt søk for å finne barn basert på parent_id hvis vi vil være presise,
+      // eller vi kan bruke navne-matching mot allOrgs vi allerede har hentet.
+      // For enkelhets skyld bruker vi navne-matching her siden allOrgs allerede er lastet.
+      const shortFylkeName = currentOrgName.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
+      childrenOrgs = allOrgs?.filter((o:any) => o.level === 'local' && o.org_type === orgType && o.name.includes(shortFylkeName)) || [];
   }
-  const { data: unpaidMembers } = await unpaidMembersQuery.limit(50);
 
-  // Samme logikk for events... (forkortet for plasshensyn)
-  const { data: unpaidParticipants } = await supabase.from('event_participants_details').select('*, events(title, price)').neq('payment_status', 'paid').gt('events.price', 0).limit(20);
-
-
-  // --- 5. KPI BEREGNINGER (Totaler) ---
-  // Bruker samme logikk som over: Hvis Superadmin -> Nasjonale tall. Hvis Leder -> Lokale tall.
-  // Her bruker vi 'automaticIncome' hvis vi har targetOrgId, som er mest nøyaktig.
-  const totalActual = fullAccounting.filter(i => i.type === 'income').reduce((a,b) => a + b.amount, 0);
-  // Estimat må hentes fra medlemsmassen (forenklet)
-  const totalExpected = totalActual * 1.2; // Mockup: 20% gjenstår. (I prod: Hent count(*) * pris)
-  const diff = totalExpected - totalActual;
-
-
-  // --- 6. HELSE-SJEKK LISTE ---
-  // Viser nivået under det vi står på
+  // 6. HELSE-STATISTIKK
   let healthStats: any[] = [];
   if (isSuperAdmin) {
-      let q = supabase.from('organization_financial_summary').select('*').eq('org_type', orgType).order('actual_income', { ascending: false });
+      let query = supabase.from('organization_financial_summary').select('*').eq('org_type', orgType).order('actual_income', { ascending: false });
       
-      if (currentLevel === 'national') q = q.eq('level', 'county');
+      if (currentLevel === 'national') query = query.eq('level', 'county');
       else if (currentLevel === 'county') {
-          const shortName = targetOrgName.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
-          q = q.eq('level', 'local').ilike('org_name', `%${shortName}%`);
+          const shortName = currentOrgName.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
+          query = query.eq('level', 'local').ilike('org_name', `%${shortName}%`);
       } else {
-           q = q.eq('id', '00000000-0000-0000-0000-000000000000'); // Tomt
+           query = query.eq('id', '00000000-0000-0000-0000-000000000000');
       }
-      const { data } = await q;
+      const { data } = await query;
       healthStats = data || [];
   }
-
-  // Hent alle organisasjoner for filteret
-  const { data: allOrgs } = await supabase.from('organizations').select('id, name, level, org_type').order('name');
 
   return (
       <OkonomiTabsClient 
@@ -130,8 +158,8 @@ export default async function OkonomiView({ searchParams, user }: Props) {
           totalExpected={totalExpected}
           diff={diff}
           year={year}
-          currentOrgId={targetOrgId}
-          currentOrgName={targetOrgName}
+          currentOrgId={currentOrgId}
+          currentOrgName={currentOrgName}
           budgetData={budgetData}
           fullAccounting={fullAccounting}
           manualEntries={manualEntries}
@@ -140,10 +168,13 @@ export default async function OkonomiView({ searchParams, user }: Props) {
           unpaidParticipants={unpaidParticipants || []}
           healthStats={healthStats}
           orgType={orgType}
-          // NYE PROPS:
+          
+          // NYE PROPS SENDES HER:
           allOrgs={allOrgs || []}
           isSuperAdmin={isSuperAdmin}
-          userRole={roleData?.role}
+          userRole={userRole}
+          childrenOrgs={childrenOrgs}
+          currentLevel={currentLevel}
       />
   )
 }

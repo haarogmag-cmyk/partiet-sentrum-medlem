@@ -1,16 +1,16 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import MarkPaidButton from './mark-paid-button'
 import SendReminderButton from './send-reminder-button'
 import BudgetView from './budget-view'
 import AccountingView from './accounting-view'
 import ReportView from './report-view'
 import FinancialHealthList from './financial-health-list'
-import EconomyFilter from './economy-filter' // <--- Filteret vi lagde
+import EconomyFilter from './economy-filter'
 
 interface Props {
     totalActual: number
@@ -27,25 +27,69 @@ interface Props {
     unpaidParticipants: any[]
     healthStats: any[]
     orgType: string
-    
-    // Nye props for filteret
     allOrgs: any[]
     isSuperAdmin: boolean
     userRole: string
+    childrenOrgs: any[]
+    currentLevel: string
 }
 
 export default function OkonomiTabsClient({ 
     totalActual, totalExpected, diff, year, currentOrgId, currentOrgName, 
     budgetData, fullAccounting, manualEntries, automaticIncome, unpaidMembers, unpaidParticipants,
-    healthStats, orgType, allOrgs, isSuperAdmin, userRole
+    healthStats, orgType, allOrgs, isSuperAdmin, userRole, childrenOrgs, currentLevel
 }: Props) {
     
     const [activeTab, setActiveTab] = useState<'oversikt' | 'budsjett' | 'regnskap' | 'rapport' | 'helse'>('oversikt')
+    const router = useRouter()
+    const searchParams = useSearchParams()
+
+    // Funksjon for å navigere nedover
+    const drillDown = (orgName: string) => {
+        const params = new URLSearchParams(searchParams.toString())
+        
+        if (currentLevel === 'national') {
+            // Fra Nasjonalt -> Fylke
+            params.set('eco_fylke', orgName)
+            params.delete('eco_lokal')
+        } else if (currentLevel === 'county') {
+            // Fra Fylke -> Lokallag
+            // VIKTIG: Vi må beholde fylkes-parameteren, ellers mister systemet konteksten om hvilket fylke vi er i (hvis filter-komponenten ikke er smart nok).
+            // Men i 'okonomi-view' prioriterer vi 'eco_lokal', så det går bra.
+            params.set('eco_lokal', orgName)
+        }
+        
+        router.push(`/dashboard?${params.toString()}`)
+    }
+
+    // Navigasjons-komponent
+    const ChildNavigator = () => {
+        if (!childrenOrgs || childrenOrgs.length === 0) return null;
+        
+        return (
+            <div className="mb-8 p-4 bg-[#fffcf1] border border-ps-primary/10 rounded-xl animate-in fade-in">
+                <h4 className="text-xs font-bold uppercase text-ps-text/50 mb-3">
+                    Gå til detaljer for {currentLevel === 'national' ? 'Fylkeslag' : 'Lokallag'}:
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                    {childrenOrgs.map((org) => (
+                        <button 
+                            key={org.id}
+                            onClick={() => drillDown(org.name)}
+                            className="px-3 py-1.5 bg-white border border-slate-200 text-ps-text text-sm font-medium rounded-lg hover:border-ps-primary hover:text-ps-primary hover:shadow-sm transition-all"
+                        >
+                            {org.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '')} →
+                        </button>
+                    ))}
+                </div>
+            </div>
+        )
+    }
 
     return (
         <div className="space-y-6">
             
-            {/* TOPPMENY */}
+            {/* MENY */}
             <div className="flex flex-wrap gap-2 border-b border-ps-primary/10 pb-2">
                 <TabButton active={activeTab === 'oversikt'} onClick={() => setActiveTab('oversikt')} label="Oversikt & Gjeld" icon="📊" />
                 <TabButton active={activeTab === 'budsjett'} onClick={() => setActiveTab('budsjett')} label="Budsjett" icon="📝" />
@@ -67,22 +111,19 @@ export default function OkonomiTabsClient({
             {/* --- FANE 1: OVERSIKT --- */}
             {activeTab === 'oversikt' && (
                 <div className="space-y-8 animate-in fade-in slide-in-from-left-4 duration-300">
-                    
-                    {/* Overskrift Kontekst */}
-                    <div>
-                        <h2 className="text-xl font-bold text-[#5e1639]">Økonomisk Oversikt</h2>
-                        <p className="text-sm text-slate-500">Viser tall for: <strong>{currentOrgName}</strong></p>
-                    </div>
-
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <KpiCard title="Innbetalt" amount={totalActual} variant="success" />
+                        <KpiCard title={`Innbetalt (${currentOrgName})`} amount={totalActual} variant="success" />
                         <KpiCard title="Estimat Kontingent" amount={totalExpected} variant="neutral" />
                         <KpiCard title="Utestående Krav" amount={diff} variant="danger" />
                     </div>
 
+                    {/* Navigasjon nedover i oversikten */}
+                    <ChildNavigator />
+
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        {/* ... Lister (som før) ... */}
                         <Card>
-                            <CardHeader title="Ubetalte medlemskap" action={<Badge variant="danger">{unpaidMembers?.length || 0}</Badge>} />
+                            <CardHeader title={`Ubetalte medlemskap (${orgType.toUpperCase()})`} action={<Badge variant="danger">{unpaidMembers?.length || 0}</Badge>} />
                             <CardContent className="p-0">
                                 <table className="w-full text-left text-sm">
                                     <tbody className="divide-y divide-slate-100">
@@ -98,7 +139,7 @@ export default function OkonomiTabsClient({
                                                 </td>
                                             </tr>
                                         ))}
-                                        {(!unpaidMembers || unpaidMembers.length === 0) && <tr><td className="p-6 text-center text-slate-400 italic">Ingen ubetalte medlemskap.</td></tr>}
+                                        {(!unpaidMembers || unpaidMembers.length === 0) && <tr><td className="p-6 text-center text-slate-400 italic">Ingen ubetalte.</td></tr>}
                                     </tbody>
                                 </table>
                             </CardContent>
@@ -128,48 +169,38 @@ export default function OkonomiTabsClient({
                 </div>
             )}
 
-            {/* --- FANE 2: BUDSJETT --- */}
+            {/* --- FANER SOM BRUKER NAVIGASJON --- */}
+            
             {activeTab === 'budsjett' && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
                     <div className="mb-6">
                          <h2 className="text-2xl font-bold text-[#5e1639]">Budsjett {year}</h2>
-                         {currentOrgId ? <p className="text-sm text-slate-500">Planlagte tall for: <strong>{currentOrgName}</strong></p> : <Badge variant="warning">Velg lag i filteret</Badge>}
+                         {currentOrgId && <p className="text-sm text-slate-500">For: <strong>{currentOrgName}</strong></p>}
                     </div>
-                    {currentOrgId ? (
-                        <BudgetView budgetData={budgetData} orgId={currentOrgId} year={year} />
-                    ) : (
-                        <EmptyState />
-                    )}
+                    <ChildNavigator />
+                    {currentOrgId ? <BudgetView budgetData={budgetData} orgId={currentOrgId} year={year} /> : <EmptyState />}
                 </div>
             )}
 
-            {/* --- FANE 3: REGNSKAP --- */}
             {activeTab === 'regnskap' && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
                     <div className="mb-6">
                          <h2 className="text-2xl font-bold text-[#5e1639]">Regnskap {year}</h2>
-                         {currentOrgId ? <p className="text-sm text-slate-500">Bilag og transaksjoner for: <strong>{currentOrgName}</strong></p> : <Badge variant="warning">Velg lag i filteret</Badge>}
+                         {currentOrgId && <p className="text-sm text-slate-500">For: <strong>{currentOrgName}</strong></p>}
                     </div>
-                    {currentOrgId ? (
-                        <AccountingView orgId={currentOrgId} year={year} manualEntries={manualEntries} automaticIncome={automaticIncome} />
-                    ) : (
-                        <EmptyState />
-                    )}
+                    <ChildNavigator />
+                    {currentOrgId ? <AccountingView orgId={currentOrgId} year={year} manualEntries={manualEntries} automaticIncome={automaticIncome} /> : <EmptyState />}
                 </div>
             )}
 
-            {/* --- FANE 4: ÅRSRAPPORT --- */}
             {activeTab === 'rapport' && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
                     <div className="mb-6">
                          <h2 className="text-2xl font-bold text-[#5e1639]">Årsrapport {year}</h2>
-                         {currentOrgId ? <p className="text-sm text-slate-500">Viser tall for: <strong>{currentOrgName}</strong></p> : <Badge variant="warning">Velg lag i filteret</Badge>}
+                         {currentOrgId && <p className="text-sm text-slate-500">For: <strong>{currentOrgName}</strong></p>}
                     </div>
-                    {currentOrgId ? (
-                        <ReportView budget={budgetData} accounting={fullAccounting} />
-                    ) : (
-                        <EmptyState />
-                    )}
+                    <ChildNavigator />
+                    {currentOrgId ? <ReportView budget={budgetData} accounting={fullAccounting} /> : <EmptyState />}
                 </div>
             )}
 
@@ -184,7 +215,7 @@ export default function OkonomiTabsClient({
                         <FinancialHealthList data={healthStats} orgType={orgType} />
                     ) : (
                         <div className="p-12 text-center bg-slate-50 border border-slate-200 rounded-xl text-slate-500">
-                            Ingen data funnet for dette nivået. (Er du på laveste nivå?)
+                            Ingen underliggende lag å vise her. (Er du på lokalt nivå?)
                         </div>
                     )}
                 </div>
@@ -194,42 +225,14 @@ export default function OkonomiTabsClient({
     )
 }
 
-// --- HJELPEKOMPONENTER ---
-
+// ... Hjelpekomponenter (TabButton, KpiCard, EmptyState) ...
 function TabButton({ active, onClick, label, icon }: any) {
-    return (
-        <button 
-            onClick={onClick}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${
-                active 
-                ? 'bg-ps-primary text-white shadow-md' 
-                : 'bg-white text-slate-500 hover:bg-slate-100 border border-slate-200'
-            }`}
-        >
-            <span>{icon}</span> {label}
-        </button>
-    )
+    return <button onClick={onClick} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${active ? 'bg-ps-primary text-white shadow-md' : 'bg-white text-slate-500 hover:bg-slate-100 border border-slate-200'}`}><span>{icon}</span> {label}</button>
 }
-
 function KpiCard({ title, amount, variant }: any) {
-    const styles: any = {
-        success: "border-green-500 text-green-700 bg-green-50/50",
-        danger: "border-red-400 text-red-700 bg-red-50/50",
-        neutral: "border-blue-400 text-ps-text bg-white"
-    }
-    return (
-        <div className={`p-6 rounded-xl border-b-4 shadow-sm ${styles[variant]}`}>
-            <h3 className="text-xs font-bold uppercase opacity-60">{title}</h3>
-            <p className="text-3xl font-black mt-1">{amount.toLocaleString()} kr</p>
-        </div>
-    )
+    const styles: any = { success: "border-green-500 bg-green-50/50", danger: "border-red-400 bg-red-50/50", neutral: "border-blue-400 bg-white" }
+    return <Card className={`border-l-4 ${styles[variant]}`}><CardContent className="p-6"><h3 className="text-xs font-bold uppercase opacity-60">{title}</h3><p className="text-3xl font-black mt-1">{amount.toLocaleString()} kr</p></CardContent></Card>
 }
-
 function EmptyState() {
-    return (
-        <div className="p-12 text-center bg-yellow-50 border border-yellow-100 rounded-xl text-yellow-800">
-            <p className="font-bold">Ingen organisasjon valgt.</p>
-            <p className="text-sm">Bruk filtermenyen øverst til å velge hvilket lag du vil administrere.</p>
-        </div>
-    )
+    return <div className="p-12 text-center bg-yellow-50 border border-yellow-100 rounded-xl text-yellow-800"><p className="font-bold">Ingen organisasjon valgt.</p><p className="text-sm">Velg i listen over eller filteret.</p></div>
 }

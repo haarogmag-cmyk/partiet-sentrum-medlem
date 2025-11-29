@@ -16,6 +16,7 @@ import Pagination from './pagination';
 import DashboardTable from './dashboard-table';
 import GrowthChart from '@/components/dashboard/growth-chart';
 import TasksWidget from '@/components/dashboard/tasks-widget';
+import { CsvImportModal } from '@/components/dashboard/csv-import-modal';
 
 // UI Komponenter
 import { Badge } from '@/components/ui/badge';
@@ -105,6 +106,13 @@ export default async function Dashboard(props: {
       lokal: activeLokal
   };
 
+  // B. Filtre for ØKONOMI (Egne parametere for drill-down)
+  const economyFilters = {
+      org: typeof searchParams.eco_org === 'string' ? searchParams.eco_org : (isSuperAdmin ? 'ps' : myOrgType),
+      fylke: lockedFylke || (typeof searchParams.eco_fylke === 'string' ? searchParams.eco_fylke : ''),
+      lokal: lockedLokal || (typeof searchParams.eco_lokal === 'string' ? searchParams.eco_lokal : '')
+  };
+
   async function signOut() {
     'use server'
     const supabase = await createClient()
@@ -136,9 +144,14 @@ export default async function Dashboard(props: {
         
         <div className="flex gap-3">
              {permissions.canEditMembers && (
-                 <Link href="/bli-medlem">
-                    <Button variant="secondary">+ Ny manuell</Button>
-                 </Link>
+                 <>
+                    <CsvImportModal>
+                        <Button variant="secondary">📥 Importer CSV</Button>
+                    </CsvImportModal>
+                    <Link href="/bli-medlem">
+                        <Button variant="secondary">+ Ny manuell</Button>
+                    </Link>
+                 </>
              )}
              <form action={signOut}>
                 <Button variant="ghost">Logg ut</Button>
@@ -166,7 +179,13 @@ export default async function Dashboard(props: {
         {/* 2. ØKONOMI */}
         {currentTab === 'okonomi' && (
             permissions.canManageEconomy 
-              ? <OkonomiView filters={dashboardFilters} searchParams={searchParams} user={user} />
+              ? <OkonomiView 
+                  filters={economyFilters}
+                  searchParams={searchParams}  // <--- NYTT
+                  user={user}                  // <--- NYTT
+                  isSuperAdmin={isSuperAdmin}  // <--- NYTT
+                  userRole={userRole}          // <--- NYTT
+                />
               : <AccessDenied />
         )}
         
@@ -203,7 +222,7 @@ export default async function Dashboard(props: {
               : <AccessDenied />
         )}
 
-        {/* Feilhåndtering for faner uten tilgang */}
+        {/* Feilhåndtering */}
         {['okonomi', 'innstillinger', 'ressurser', 'arrangement', 'arkiv'].includes(currentTab) && 
          ((currentTab === 'okonomi' && !permissions.canManageEconomy) || 
          (currentTab === 'innstillinger' && !isSuperAdmin && !permissions.canManageRoles) ||
@@ -263,7 +282,6 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
 
   const { data: pagedMembers, count: totalCount } = await queryBuilder.order('last_name', { ascending: true }).range(startRange, endRange);
 
-  // HENT ALLE ORGANISASJONER
   const { data: allOrgs } = await supabase.from('organizations').select('id, name, level, org_type').order('name');
 
   const fylkeslag = allOrgs?.filter((o:any) => o.level === 'county') || [];
@@ -273,8 +291,7 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
   const totalItems = totalCount || 0;
   const totalPages = Math.ceil(totalItems / PAGE_SIZE);
 
-  // --- NYTT: HENT TASKS FOR CRM ---
-  // Vi henter oppgaver tildelt adminens organisasjon (via RLS)
+  // Hent tasks for CRM
   const { data: tasks } = await supabase
     .from('tasks')
     .select('*, member:members(phone, email)')
@@ -287,23 +304,19 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
         
-        {/* SEKSJON 1: KPI & GRAFIKK */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="space-y-4">
                 <StatsCard title="Totalt i utvalg" count={totalItems} />
                 <StatsCard title="Betalende (PS)" count={memberList.filter((m:any) => m.payment_status_ps === 'active').length} variant="success" />
                 <StatsCard title="Ubetalt (PS)" count={memberList.filter((m:any) => m.payment_status_ps !== 'active').length} variant="danger" />
             </div>
-
             <div className="lg:col-span-2 h-full">
                 <GrowthChart />
             </div>
         </div>
 
-        {/* SEKSJON 2: CRM OPPGAVER (Send med 'tasks' prop!) */}
         {tasks && tasks.length > 0 && <TasksWidget tasks={tasks} />}
 
-        {/* SEKSJON 3: MEDLEMSLISTE */}
         <div className="space-y-4">
             <MemberFilter 
                 fylkeslag={fylkeslag} 
