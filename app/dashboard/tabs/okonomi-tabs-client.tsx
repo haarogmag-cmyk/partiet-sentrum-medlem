@@ -3,12 +3,14 @@
 import { useState } from 'react'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import MarkPaidButton from './mark-paid-button'
 import SendReminderButton from './send-reminder-button'
 import BudgetView from './budget-view'
 import AccountingView from './accounting-view'
 import ReportView from './report-view'
 import FinancialHealthList from './financial-health-list'
+import EconomyFilter from './economy-filter' // <--- Filteret vi lagde
 
 interface Props {
     totalActual: number
@@ -23,23 +25,27 @@ interface Props {
     automaticIncome: any[]
     unpaidMembers: any[]
     unpaidParticipants: any[]
-    healthStats: any[] // <--- NY PROP
-    orgType: string    // <--- NY PROP
+    healthStats: any[]
+    orgType: string
+    
+    // Nye props for filteret
+    allOrgs: any[]
+    isSuperAdmin: boolean
+    userRole: string
 }
 
 export default function OkonomiTabsClient({ 
     totalActual, totalExpected, diff, year, currentOrgId, currentOrgName, 
     budgetData, fullAccounting, manualEntries, automaticIncome, unpaidMembers, unpaidParticipants,
-    healthStats, orgType
+    healthStats, orgType, allOrgs, isSuperAdmin, userRole
 }: Props) {
     
-    // Ny rekkefølge: Oversikt -> Budsjett -> Regnskap -> Rapport -> Helse
     const [activeTab, setActiveTab] = useState<'oversikt' | 'budsjett' | 'regnskap' | 'rapport' | 'helse'>('oversikt')
 
     return (
         <div className="space-y-6">
             
-            {/* SUB-TAB MENY */}
+            {/* TOPPMENY */}
             <div className="flex flex-wrap gap-2 border-b border-ps-primary/10 pb-2">
                 <TabButton active={activeTab === 'oversikt'} onClick={() => setActiveTab('oversikt')} label="Oversikt & Gjeld" icon="📊" />
                 <TabButton active={activeTab === 'budsjett'} onClick={() => setActiveTab('budsjett')} label="Budsjett" icon="📝" />
@@ -48,18 +54,35 @@ export default function OkonomiTabsClient({
                 <TabButton active={activeTab === 'helse'} onClick={() => setActiveTab('helse')} label="Helse-sjekk" icon="🏥" />
             </div>
 
-            {/* --- FANE 1: OVERSIKT & GJELD --- */}
+            {/* FILTER (Kun for Superadmin) */}
+            {isSuperAdmin && (
+                <EconomyFilter 
+                    allOrgs={allOrgs} 
+                    isSuperAdmin={isSuperAdmin} 
+                    activeTab={activeTab} 
+                    userRole={userRole}
+                />
+            )}
+
+            {/* --- FANE 1: OVERSIKT --- */}
             {activeTab === 'oversikt' && (
                 <div className="space-y-8 animate-in fade-in slide-in-from-left-4 duration-300">
+                    
+                    {/* Overskrift Kontekst */}
+                    <div>
+                        <h2 className="text-xl font-bold text-[#5e1639]">Økonomisk Oversikt</h2>
+                        <p className="text-sm text-slate-500">Viser tall for: <strong>{currentOrgName}</strong></p>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <KpiCard title={`Innbetalt (${orgType.toUpperCase()})`} amount={totalActual} variant="success" />
+                        <KpiCard title="Innbetalt" amount={totalActual} variant="success" />
                         <KpiCard title="Estimat Kontingent" amount={totalExpected} variant="neutral" />
                         <KpiCard title="Utestående Krav" amount={diff} variant="danger" />
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         <Card>
-                            <CardHeader title={`Ubetalte medlemskap (${orgType.toUpperCase()})`} action={<Badge variant="danger">{unpaidMembers?.length || 0}</Badge>} />
+                            <CardHeader title="Ubetalte medlemskap" action={<Badge variant="danger">{unpaidMembers?.length || 0}</Badge>} />
                             <CardContent className="p-0">
                                 <table className="w-full text-left text-sm">
                                     <tbody className="divide-y divide-slate-100">
@@ -75,9 +98,7 @@ export default function OkonomiTabsClient({
                                                 </td>
                                             </tr>
                                         ))}
-                                        {(!unpaidMembers || unpaidMembers.length === 0) && (
-                                            <tr><td className="p-6 text-center text-slate-400 italic">Ingen ubetalte medlemskap.</td></tr>
-                                        )}
+                                        {(!unpaidMembers || unpaidMembers.length === 0) && <tr><td className="p-6 text-center text-slate-400 italic">Ingen ubetalte medlemskap.</td></tr>}
                                     </tbody>
                                 </table>
                             </CardContent>
@@ -95,14 +116,10 @@ export default function OkonomiTabsClient({
                                                     <div className="text-xs text-slate-500">{p.events?.title}</div>
                                                 </td>
                                                 <td className="p-4 text-right font-mono font-bold text-ps-primary">{p.events?.price},-</td>
-                                                <td className="p-4 text-right flex flex-col items-end gap-2">
-                                                    <MarkPaidButton type="event" id={p.user_id} eventId={p.event_id} label="Betalt" />
-                                                </td>
+                                                <td className="p-4 text-right"><MarkPaidButton type="event" id={p.user_id} eventId={p.event_id} label="Betalt" /></td>
                                             </tr>
                                         ))}
-                                        {(!unpaidParticipants || unpaidParticipants.length === 0) && (
-                                            <tr><td className="p-6 text-center text-slate-400 italic">Alt betalt.</td></tr>
-                                        )}
+                                        {(!unpaidParticipants || unpaidParticipants.length === 0) && <tr><td className="p-6 text-center text-slate-400 italic">Alt betalt.</td></tr>}
                                     </tbody>
                                 </table>
                             </CardContent>
@@ -156,18 +173,18 @@ export default function OkonomiTabsClient({
                 </div>
             )}
 
-            {/* --- FANE 5: HELSE-SJEKK (NY) --- */}
+            {/* --- FANE 5: HELSE-SJEKK --- */}
             {activeTab === 'helse' && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
                     <div className="mb-6">
                          <h2 className="text-2xl font-bold text-[#5e1639]">Økonomisk Helse</h2>
-                         <p className="text-sm text-slate-500">Oversikt over alle underliggende lag.</p>
+                         <p className="text-sm text-slate-500">Oversikt over underliggende lag.</p>
                     </div>
                     {healthStats.length > 0 ? (
                         <FinancialHealthList data={healthStats} orgType={orgType} />
                     ) : (
                         <div className="p-12 text-center bg-slate-50 border border-slate-200 rounded-xl text-slate-500">
-                            Ingen data tilgjengelig for helsesjekk. Prøv å velge "Hele landet" eller et Fylke i filteret for å se underlagene.
+                            Ingen data funnet for dette nivået. (Er du på laveste nivå?)
                         </div>
                     )}
                 </div>
@@ -176,6 +193,8 @@ export default function OkonomiTabsClient({
         </div>
     )
 }
+
+// --- HJELPEKOMPONENTER ---
 
 function TabButton({ active, onClick, label, icon }: any) {
     return (

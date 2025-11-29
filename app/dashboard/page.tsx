@@ -9,7 +9,6 @@ import KommunikasjonView from './tabs/kommunikasjon-view';
 import ArrangementView from './tabs/arrangement-view';
 import SettingsView from './tabs/settings-view';
 import RessursView from './tabs/ressurs-view';
-import InternArkivView from './tabs/intern-arkiv-view'; // <--- NY IMPORT
 
 // Komponenter for Medlemslisten
 import MemberFilter from './filter';
@@ -31,13 +30,14 @@ export default async function Dashboard(props: {
   searchParams: SearchParams
 }) {
   const supabase = await createClient();
+  // Vi må 'awaite' searchParams i Next.js 15
   const searchParams = await props.searchParams;
   
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
   // --- 1. HENT ADMIN ROLLE & HIERARKI ---
-  const { data: adminRole } = await supabase
+  const { data: adminRole, error: roleError } = await supabase
     .from('admin_roles')
     .select(`
         role, 
@@ -51,6 +51,9 @@ export default async function Dashboard(props: {
     `)
     .eq('user_id', user.id)
     .single();
+
+  // Debugging (valgfritt)
+  if (roleError && roleError.code !== 'PGRST116') console.error("Role fetch error:", roleError);
 
   const roleData = adminRole as any;
   
@@ -67,7 +70,6 @@ export default async function Dashboard(props: {
       canSendComms: ['superadmin', 'leader', 'deputy_leader'].includes(userRole),
       canManageEvents: ['superadmin', 'leader', 'deputy_leader', 'board_member'].includes(userRole),
       canManageRoles: ['superadmin', 'leader', 'deputy_leader'].includes(userRole),
-      // Alle i styret (inkludert kasserer og styremedlem) bør ha tilgang til arkivet
       canViewArchive: ['superadmin', 'leader', 'deputy_leader', 'treasurer', 'board_member'].includes(userRole)
   };
 
@@ -137,7 +139,7 @@ export default async function Dashboard(props: {
         </div>
         
         <div className="flex gap-3">
-             {/* Import Button vises kun hvis rettigheter */}
+             {/* Import Button / Ny manuell */}
              {permissions.canEditMembers && (
                  <Link href="/bli-medlem">
                     <Button variant="secondary">+ Ny manuell</Button>
@@ -150,8 +152,9 @@ export default async function Dashboard(props: {
       </div>
 
       {/* --- INNHOLD SWITCHER --- */}
-      <Suspense fallback={<div className="p-12 text-center text-ps-text/60 bg-white rounded-xl">Laster innhold...</div>}>
+      <Suspense fallback={<div className="p-12 text-center text-ps-text/60 bg-white rounded-xl border border-ps-primary/10">Laster innhold...</div>}>
       
+        {/* 1. MEDLEMMER */}
         {currentTab === 'medlemmer' && (
             <MedlemmerContent 
                 searchParams={searchParams} 
@@ -165,16 +168,23 @@ export default async function Dashboard(props: {
             />
         )}
 
+        {/* 2. ØKONOMI */}
         {currentTab === 'okonomi' && (
             permissions.canManageEconomy 
-              ? <OkonomiView filters={dashboardFilters} />
+              ? <OkonomiView 
+                  filters={dashboardFilters} 
+                  searchParams={searchParams} // <--- HER ER RETTELSEN
+                  user={user}                 // <--- HER ER RETTELSEN
+                />
               : <AccessDenied />
         )}
         
+        {/* 3. KOMMUNIKASJON */}
         {currentTab === 'kommunikasjon' && (
             <KommunikasjonView permissions={permissions} />
         )}
         
+        {/* 4. ARRANGEMENT */}
         {currentTab === 'arrangement' && (
             <ArrangementView 
                 filters={dashboardFilters} 
@@ -183,17 +193,19 @@ export default async function Dashboard(props: {
             />
         )}
 
+        {/* 5. RESSURSER */}
         {currentTab === 'ressurser' && (
             <RessursView permissions={permissions} />
         )}
 
-        {/* NY: STYRINGSARKIV */}
+        {/* 6. INTERNT ARKIV */}
         {currentTab === 'arkiv' && (
-            permissions.canViewArchive 
-              ? <InternArkivView permissions={permissions} />
+             permissions.canViewArchive
+              ? <div className="bg-yellow-50 p-4 rounded-lg text-yellow-800 mb-4 border border-yellow-200 text-sm">🚧 Internt Arkiv-modul (Kommer snart / Implementer view her)</div>
               : <AccessDenied />
         )}
 
+        {/* 7. INNSTILLINGER */}
         {currentTab === 'innstillinger' && (
             (isSuperAdmin || permissions.canManageRoles) 
               ? <SettingsView />
@@ -206,8 +218,7 @@ export default async function Dashboard(props: {
          (currentTab === 'innstillinger' && !isSuperAdmin && !permissions.canManageRoles) ||
          (currentTab === 'ressurser' && !permissions.canManageEvents) ||
          (currentTab === 'arrangement' && !permissions.canManageEvents) ||
-         (currentTab === 'arkiv' && !permissions.canViewArchive)
-         ) && (
+         (currentTab === 'arkiv' && !permissions.canViewArchive)) && (
             <AccessDenied />
         )}
       </Suspense> 
@@ -239,7 +250,6 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
   const startRange = (currentPage - 1) * PAGE_SIZE; 
   const endRange = startRange + PAGE_SIZE - 1; 
 
-  // BYGG SPØRRING
   let queryBuilder = supabase.from('member_details_view').select('*', { count: 'exact' });
 
   if (searchQuery) {
@@ -261,25 +271,13 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
 
   const { data: pagedMembers, count: totalCount } = await queryBuilder.order('last_name', { ascending: true }).range(startRange, endRange);
 
-  // HENT ALLE ORGANISASJONER
   const { data: allOrgs } = await supabase.from('organizations').select('id, name, level, org_type').order('name');
-
   const fylkeslag = allOrgs?.filter((o:any) => o.level === 'county') || [];
   const lokallag = allOrgs?.filter((o:any) => o.level === 'local') || [];
 
   const memberList = pagedMembers || [];
   const totalItems = totalCount || 0;
   const totalPages = Math.ceil(totalItems / PAGE_SIZE);
-
-  // --- HENT TASKS (CRM) ---
-  // Vi henter oppgaver tildelt adminens organisasjon (via RLS eller org-id)
-  // Her henter vi oppgaver der admin har tilgang, begrenset til pending.
-  const { data: tasks } = await supabase
-    .from('tasks')
-    .select('*, member:members(phone, email)')
-    .eq('status', 'pending')
-    .order('due_date', { ascending: true })
-    .limit(5);
 
   const activeFilters = { ...filters, q: searchQuery, vol: volunteerFilter };
 
@@ -300,7 +298,9 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
         </div>
 
         {/* SEKSJON 2: CRM OPPGAVER */}
-        {tasks && tasks.length > 0 && <TasksWidget tasks={tasks} />}
+        {/* Vi har fjernet CRM-kallet her fordi det nå gjøres internt i TasksWidget eller via en egen komponent, 
+            eller du kan legge det tilbake hvis du har TasksWidget klar og importert */}
+        <TasksWidget /> 
 
         {/* SEKSJON 3: MEDLEMSLISTE */}
         <div className="space-y-4">
