@@ -44,7 +44,7 @@ export default async function Home() {
                            Vanlig: Hvit bakgrunn, Sentrum-rød tekst, Sentrum-rød kant (synlig mot hvit bakgrunn, men her er bakgrunnen rød, så vi bruker hvit kant for å poppe)
                            Endring etter ønske: Hvit bakgrunn, Rød tekst.
                         */}
-                        <Button className="bg-white text-[#c93960] border-2 border-white font-bold py-6 px-8 text-lg shadow-xl hover:bg-white hover:text-[#c93960] hover:border-[#c93960] transition-colors">
+                        <Button className="bg-[#c93960] text-white border-2 border-white font-bold py-6 px-8 text-lg shadow-xl hover:bg-white hover:text-[#c93960] hover:border-[#c93960] transition-colors">
                             Bli medlem →
                         </Button>
                     </Link>
