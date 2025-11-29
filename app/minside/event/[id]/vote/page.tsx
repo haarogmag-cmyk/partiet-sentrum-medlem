@@ -1,97 +1,113 @@
 import { createClient } from '@/utils/supabase/server'
+import { redirect } from 'next/navigation'
+import VotingInterface from '../voting-client'
+import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import Link from 'next/link'
-import VotingInterface from '../voting-client' // Vi går ett hakk opp (..) for å finne komponenten
+import { Button } from '@/components/ui/button'
 
 type Params = Promise<{ id: string }>
 
-export default async function VotePage({ params }: { params: Params }) {
+export default async function VotingPage({ params }: { params: Params }) {
   const { id } = await params
   const supabase = await createClient()
+  
   const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
 
-  if (!user) return <div>Logg inn for å delta.</div>
-
-  // 1. Hent arrangement info (tittel)
-  const { data: event } = await supabase
-    .from('events')
-    .select('title, location')
-    .eq('id', id)
-    .single()
-
-  // 2. Sjekk om brukeren har stemmerett
-  const { data: participant } = await supabase
+  // 1. Sjekk at brukeren er påmeldt og har betalt (Stemmerett)
+  const { data: participation } = await supabase
     .from('event_participants')
-    .select('has_voting_rights')
+    .select('status, payment_status')
     .eq('event_id', id)
     .eq('user_id', user.id)
     .single()
 
-  const canVote = participant?.has_voting_rights
+  // Hvis ikke påmeldt eller ikke betalt -> Ingen adgang
+  // (Du kan justere reglene her, f.eks. om gratis arrangementer gir stemmerett)
+  if (!participation || participation.payment_status !== 'paid') {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-[#fffcf1] p-4">
+            <Card className="max-w-md text-center p-6 border-red-200 bg-red-50">
+                <h1 className="text-xl font-bold text-red-800 mb-2">Ingen stemmerett</h1>
+                <p className="text-sm text-red-700 mb-4">Du må være påmeldt og ha betalt deltakeravgiften for å delta i voteringer.</p>
+                <Link href={`/minside/event/${id}`}>
+                    <Button variant="secondary">Gå tilbake til arrangementet</Button>
+                </Link>
+            </Card>
+        </div>
+      )
+  }
 
-  // 3. Hent aktive avstemninger
+  // 2. Hent arrangement info
+  const { data: event } = await supabase.from('events').select('title').eq('id', id).single()
+
+  // 3. Hent aktive saker (polls) og svaralternativer
   const { data: polls } = await supabase
     .from('polls')
-    .select(`*, options:poll_options(id, text)`)
+    .select(`
+        *,
+        options:poll_options(*)
+    `)
     .eq('event_id', id)
-    .eq('is_active', true) // VIKTIG: Vis kun aktive saker
-    .order('created_at')
+    .eq('is_active', true) // Vi viser kun åpne saker i valglokalet
+    .order('created_at', { ascending: false })
 
-  // 4. Hent mine stemmer (for å markere hva jeg har stemt på)
+  // 4. Sjekk hva brukeren allerede har stemt på
   const { data: myVotes } = await supabase
     .from('votes')
     .select('poll_id')
     .eq('user_id', user.id)
-
-  const votedPollIds = new Set(myVotes?.map((v: any) => v.poll_id))
+  
+  const votedPollIds = myVotes?.map(v => v.poll_id) || []
 
   return (
-    <div className="min-h-screen p-4 md:p-8 bg-[#5e1639] font-sans text-white">
-      <div className="max-w-2xl mx-auto space-y-8">
-        
-        {/* Header */}
-        <div className="flex justify-between items-center border-b border-white/20 pb-4">
-            <div>
-                <Link href={`/minside/event/${id}`} className="text-sm text-white/60 hover:text-white hover:underline">← Tilbake til info</Link>
-                <h1 className="text-2xl font-bold mt-1">Valglokale: {event?.title}</h1>
+    <div className="min-h-screen bg-[#fffcf1] p-4 font-sans text-[#5e1639]">
+        <div className="max-w-2xl mx-auto space-y-6">
+            
+            {/* HEADER */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <div className="flex items-center gap-2 text-sm opacity-60 mb-1">
+                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                        Digitalt Valglokale
+                    </div>
+                    <h1 className="text-2xl font-black">{event?.title}</h1>
+                </div>
+                <Link href={`/minside/event/${id}`}>
+                    <Button variant="secondary" className="text-xs">Lukk</Button>
+                </Link>
             </div>
-            <div className="bg-white/10 px-3 py-1 rounded-full text-xs font-bold border border-white/20">
-                🟢 Aktiv
-            </div>
-        </div>
 
-        {/* SJEKK STEMMERETT */}
-        {!canVote ? (
-            <div className="bg-yellow-500/20 border border-yellow-500/50 p-6 rounded-xl text-center">
-                <h3 className="font-bold text-yellow-200">Ingen stemmerett</h3>
-                <p className="text-sm opacity-80">Du er registrert, men mangler stemmerett i dette møtet.</p>
-            </div>
-        ) : (
-            <div className="space-y-6">
-                {polls && polls.length > 0 ? (
-                    polls.map((poll) => (
-                        <div key={poll.id} className="bg-white text-[#5e1639] p-6 rounded-2xl shadow-xl animate-in slide-in-from-bottom-4">
-                            <h3 className="text-xl font-bold mb-4 pb-2 border-b border-slate-100">{poll.question}</h3>
-                            
+            {/* INNHOLD */}
+            {polls && polls.length > 0 ? (
+                polls.map((poll: any) => (
+                    <Card key={poll.id} className="border-l-4 border-l-[#c93960] shadow-lg">
+                        <CardHeader title={poll.question} description="Velg ett alternativ." />
+                        <CardContent>
                             <VotingInterface 
                                 poll={poll} 
                                 eventId={id} 
-                                hasVoted={votedPollIds.has(poll.id)} 
+                                hasVoted={votedPollIds.includes(poll.id)} 
                             />
-                        </div>
-                    ))
-                ) : (
-                    <div className="p-12 text-center bg-white/5 rounded-xl border border-white/10">
-                        <p className="text-xl font-bold opacity-50">Ingen aktive saker</p>
-                        <p className="text-sm opacity-40 mt-2">Vent på at møteleder åpner en ny sak.</p>
-                        <a href="" className="inline-block mt-6 px-4 py-2 bg-white/10 rounded-lg text-sm font-bold hover:bg-white/20 transition">
-                            🔄 Oppdater siden
-                        </a>
-                    </div>
-                )}
-            </div>
-        )}
-
-      </div>
+                        </CardContent>
+                    </Card>
+                ))
+            ) : (
+                <div className="text-center py-20">
+                    <div className="text-6xl mb-4">☕</div>
+                    <h3 className="text-xl font-bold mb-2">Ingen åpne saker</h3>
+                    <p className="text-slate-500">Vent til møteleder åpner neste votering.</p>
+                    <Button 
+                        variant="outline" 
+                        className="mt-6"
+                        onClick={() => { /* Vi trenger en client component for reload, eller bare be brukeren refreshe */ }}
+                    >
+                        Last inn på nytt ↻
+                    </Button>
+                </div>
+            )}
+            
+        </div>
     </div>
   )
 }
