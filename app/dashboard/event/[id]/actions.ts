@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache'
 
 // --- ARRANGEMENT ---
 
-// Oppdater arrangement (Redigering)
+// Oppdater arrangement (Redigering med Form Builder)
 export async function updateEvent(formData: FormData) {
   const supabase = await createClient()
   
@@ -20,11 +20,14 @@ export async function updateEvent(formData: FormData) {
   const price = Number(formData.get('price')) || 0
   const isDigital = formData.get('is_digital') === 'on'
 
-  // Håndter egendefinerte spørsmål
-  const questionsRaw = formData.get('custom_questions_raw') as string
-  const customQuestions = questionsRaw 
-    ? questionsRaw.split(',').map(s => s.trim()).filter(s => s) 
-    : []
+  // Hent og pars skjemakonfigurasjonen (Erstatter custom_questions)
+  const registrationSchemaRaw = formData.get('registration_schema') as string;
+  const registrationSchema = registrationSchemaRaw ? JSON.parse(registrationSchemaRaw) : [];
+
+  // Vi beholder custom_questions for bakoverkompatibilitet eller migrerer logikken hvis ønskelig,
+  // men her antar vi at vi bytter helt til registration_schema.
+  // OBS: Hvis du vil beholde det gamle tekstfeltet midlertidig, kan du hente custom_questions_raw også.
+  // Men siden vi nå bruker Form Builder, satser vi på schema.
 
   const { error } = await supabase
     .from('events')
@@ -35,7 +38,7 @@ export async function updateEvent(formData: FormData) {
         location,
         price,
         is_digital: isDigital,
-        custom_questions: customQuestions // <--- NYTT FELT
+        registration_schema: registrationSchema // <--- DETTE ER DEN NYE LAGRINGEN
     })
     .eq('id', id)
 
@@ -45,8 +48,8 @@ export async function updateEvent(formData: FormData) {
   }
 
   revalidatePath(`/dashboard/event/${id}`)
-  revalidatePath('/dashboard')
-  revalidatePath('/minside')
+  revalidatePath('/dashboard') 
+  revalidatePath('/minside') 
   return { success: true }
 }
 
