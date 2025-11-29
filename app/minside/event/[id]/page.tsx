@@ -1,94 +1,134 @@
 import { createClient } from '@/utils/supabase/server'
 import Link from 'next/link'
+import JoinForm from './join-button'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { notFound } from 'next/navigation'
 
-// Denne siden er offentlig (ingen login sjekk)
-export default async function PublicEventPage({ params }: { params: Promise<{ id: string }> }) {
+type Params = Promise<{ id: string }>
+
+export default async function MemberEventPage({ params }: { params: Params }) {
   const { id } = await params
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  // Hent eventet (RLS-regelen vi lagde sikrer at vi kun får svar hvis det er publisert)
-  const { data: event } = await supabase
-    .from('events')
-    .select('*')
-    .eq('id', id)
-    .single()
+  if (!user) return <div className="p-10 text-center">Logg inn.</div>
 
-  if (!event) return notFound()
+  // 1. Hent data
+  const { data: event } = await supabase.from('events').select('*').eq('id', id).single()
+  const { data: participant } = await supabase.from('event_participants').select('*').eq('event_id', id).eq('user_id', user.id).single()
 
+  const isRegistered = !!participant
+  
+  const documents = event.document_links ? (typeof event.document_links === 'string' ? JSON.parse(event.document_links) : event.document_links) : []
+  const accommodationOptions = event.accommodation_options ? (typeof event.accommodation_options === 'string' ? JSON.parse(event.accommodation_options) : event.accommodation_options) : []
+
+  // --- IKKE PÅMELDT VIEW ---
+  if (!isRegistered) {
+      return (
+          <div className="min-h-screen p-4 md:p-8 bg-background flex flex-col items-center justify-center">
+              <Card className="max-w-lg w-full">
+                  <div className="p-6 border-b border-ps-primary/10">
+                      <Link href="/minside" className="text-xs text-ps-text/60 hover:underline mb-4 inline-block">← Tilbake</Link>
+                      <h1 className="text-3xl font-black text-ps-primary mb-2">{event.title}</h1>
+                      <div className="flex gap-3 text-sm text-ps-text/70">
+                          <span>📅 {new Date(event.start_time).toLocaleDateString('no-NO')}</span>
+                          <span>📍 {event.location}</span>
+                      </div>
+                  </div>
+                  <CardContent className="space-y-6 pt-6">
+                      <p className="text-ps-text leading-relaxed">{event.description}</p>
+                      {/* Påmeldingsskjema */}
+                      <JoinForm eventId={id} price={event.price || 0} options={accommodationOptions} />
+                  </CardContent>
+              </Card>
+          </div>
+      )
+  }
+
+  // --- PÅMELDT VIEW ---
   return (
-    <div className="min-h-screen bg-[#fffcf1] font-sans text-[#5e1639]">
-      
-      {/* HERO SEKSJON */}
-      <div className="bg-[#5e1639] text-white py-20 px-4 text-center relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-full bg-white/5 opacity-20 pattern-dots"></div>
-        <div className="relative z-10 max-w-3xl mx-auto space-y-4">
-            <Badge variant="outline" className="text-white border-white/30 bg-white/10">
-                Arrangement
-            </Badge>
-            <h1 className="text-4xl md:text-6xl font-black tracking-tight">{event.title}</h1>
-            <p className="text-xl md:text-2xl opacity-90 font-light">
-                {new Date(event.start_time).toLocaleDateString('no-NO', { day: 'numeric', month: 'long', year: 'numeric' })} 
-                {' • '} 
-                {event.location || 'Digitalt'}
-            </p>
-        </div>
-      </div>
-
-      {/* INNHOLD */}
-      <div className="max-w-4xl mx-auto px-4 -mt-10 relative z-20 pb-20">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            
-            {/* Venstre: Info */}
-            <div className="md:col-span-2 space-y-8">
-                <Card className="p-8 shadow-xl border-0">
-                    <h2 className="text-2xl font-bold mb-4">Om arrangementet</h2>
-                    <div className="prose prose-lg text-slate-600 whitespace-pre-wrap leading-relaxed">
-                        {event.description || 'Ingen beskrivelse lagt til.'}
+    <div className="min-h-screen p-4 md:p-8 bg-background font-sans text-ps-text">
+      <div className="max-w-3xl mx-auto space-y-6">
+        
+        {/* Header Kort */}
+        <Card className="border-l-4 border-l-green-500">
+            <CardContent className="p-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <Link href="/minside" className="text-xs text-ps-text/50 hover:underline mb-2 block">← Tilbake til oversikt</Link>
+                        <h1 className="text-3xl font-black text-ps-text">{event.title}</h1>
+                        <div className="flex flex-wrap gap-3 mt-2 text-sm text-ps-text/70 font-medium">
+                            <span>📅 {new Date(event.start_time).toLocaleDateString('no-NO')}</span>
+                            <span>📍 {event.location}</span>
+                            {event.is_digital && <Badge variant="us">Digitalt</Badge>}
+                        </div>
                     </div>
-                </Card>
-            </div>
-
-            {/* Høyre: Call to Action (Verving!) */}
-            <div className="space-y-6">
-                <Card className="p-6 border-l-4 border-l-[#c93960] shadow-lg">
-                    <h3 className="font-bold text-lg mb-2">Bli med?</h3>
-                    <p className="text-sm text-slate-500 mb-6">
-                        Dette arrangementet er for medlemmer av Partiet Sentrum.
-                    </p>
-                    
-                    <div className="space-y-3">
-                        <Link href="/bli-medlem" className="block">
-                            <Button className="w-full py-6 text-lg shadow-xl hover:scale-[1.02] transition-transform">
-                                👋 Meld deg inn nå
-                            </Button>
-                        </Link>
-                        <Link href="/login" className="block">
-                            <Button variant="outline" className="w-full">
-                                Allerede medlem? Logg inn
-                            </Button>
-                        </Link>
-                    </div>
-
-                    <p className="text-xs text-center text-slate-400 mt-4">
-                        Det tar kun 2 minutter å bli medlem.
-                    </p>
-                </Card>
-
-                <div className="text-center">
-                    <p className="text-sm font-bold opacity-50 mb-2">Del arrangementet</p>
-                    <div className="flex justify-center gap-2">
-                        {/* Her kan vi legge til delingsknapper senere */}
-                        <Button variant="ghost" size="sm" className="bg-white">Kopier lenke 🔗</Button>
-                    </div>
+                    <Badge variant="success">Du er påmeldt ✓</Badge>
                 </div>
-            </div>
-        </div>
-      </div>
 
+                {/* Betalingsstatus */}
+                {event.price > 0 && (
+                    <div className={`mt-6 p-4 rounded-xl border flex justify-between items-center ${participant.payment_status === 'paid' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-yellow-50 border-yellow-200 text-yellow-800'}`}>
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-bold uppercase opacity-70">Betaling</span>
+                            <span className="font-bold">{participant.payment_status === 'paid' ? 'Betalt' : 'Venter på betaling'}</span>
+                        </div>
+                        {participant.payment_status !== 'paid' && (
+                            <Button variant="outline" className="text-xs">Betal nå</Button>
+                        )}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* VALGLOKALE */}
+            <Card className="h-full border-2 border-ps-primary/10 hover:border-ps-primary/30 transition-colors">
+                <CardHeader title="Valg & Avstemning" />
+                <CardContent className="flex flex-col items-center text-center space-y-4">
+                    <div className="w-16 h-16 bg-ps-primary/10 rounded-full flex items-center justify-center text-3xl">🗳️</div>
+                    <p className="text-sm text-ps-text/70">
+                        Delta i voteringer under møtet. <br/>Dørene åpnes når møteleder starter en sak.
+                    </p>
+                    <Link href={`/minside/event/${id}/vote`} className="w-full">
+                        <Button className="w-full">Gå til valglokalet →</Button>
+                    </Link>
+                </CardContent>
+            </Card>
+
+            {/* DOKUMENTER */}
+            <Card className="h-full">
+                <CardHeader title="Saksdokumenter" />
+                <CardContent>
+                    {documents.length > 0 ? (
+                        <div className="space-y-2">
+                            {documents.map((doc: any, i: number) => (
+                                <a key={i} href={doc.url} target="_blank" className="flex items-center gap-3 p-3 rounded-lg hover:bg-ps-primary/5 transition group border border-transparent hover:border-ps-primary/10">
+                                    <span className="text-xl">📄</span>
+                                    <span className="font-bold text-sm group-hover:text-ps-primary">{doc.title}</span>
+                                </a>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-sm text-ps-text/40 italic text-center py-4">Ingen dokumenter tilgjengelig.</p>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+
+        {/* INFO BOKS */}
+        <Card>
+            <CardHeader title="Beskrivelse" />
+            <CardContent>
+                <div className="prose prose-sm text-ps-text/80 leading-relaxed whitespace-pre-wrap">
+                    {event.description}
+                </div>
+            </CardContent>
+        </Card>
+
+      </div>
     </div>
   )
 }
