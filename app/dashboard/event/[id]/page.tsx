@@ -102,7 +102,7 @@ export default async function EventAdminPage({ params }: { params: Params }) {
 
             <div className="space-y-4">
                 <div className="flex justify-between items-end">
-                    <h2 className="text-xl font-bold text-[#5e1639]">Digitalt Årsmøte</h2>
+                    <h2 className="text-xl font-bold text-[#5e1639]">Valg</h2> {/* <--- ENDRET HER */}
                     <Link href={`/minside/event/${id}/vote`} target="_blank">
                         <Button variant="ghost" className="text-xs">Åpne valglokale (Test) ↗</Button>
                     </Link>

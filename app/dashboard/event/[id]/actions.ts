@@ -20,6 +20,12 @@ export async function updateEvent(formData: FormData) {
   const price = Number(formData.get('price')) || 0
   const isDigital = formData.get('is_digital') === 'on'
 
+  // Håndter egendefinerte spørsmål
+  const questionsRaw = formData.get('custom_questions_raw') as string
+  const customQuestions = questionsRaw 
+    ? questionsRaw.split(',').map(s => s.trim()).filter(s => s) 
+    : []
+
   const { error } = await supabase
     .from('events')
     .update({
@@ -28,7 +34,8 @@ export async function updateEvent(formData: FormData) {
         start_time: startTime,
         location,
         price,
-        is_digital: isDigital
+        is_digital: isDigital,
+        custom_questions: customQuestions // <--- NYTT FELT
     })
     .eq('id', id)
 
@@ -38,8 +45,8 @@ export async function updateEvent(formData: FormData) {
   }
 
   revalidatePath(`/dashboard/event/${id}`)
-  revalidatePath('/dashboard') // Oppdater oversikten
-  revalidatePath('/minside') // Oppdater medlemsvisningen
+  revalidatePath('/dashboard')
+  revalidatePath('/minside')
   return { success: true }
 }
 
@@ -59,6 +66,7 @@ export async function togglePublishEvent(eventId: string, isPublished: boolean) 
   revalidatePath(`/dashboard/event/${eventId}`)
   revalidatePath('/dashboard')
   revalidatePath('/minside')
+  revalidatePath('/') 
   return { success: true }
 }
 
@@ -111,21 +119,20 @@ export async function togglePollStatus(pollId: string, isActive: boolean, eventI
   return { success: true }
 }
 
-// Slett sak (Oppdatert med sikker returtype)
+// Slett sak
 export async function deletePoll(pollId: string, eventId: string) {
     const supabase = await createClient()
     const { error } = await supabase.from('polls').delete().eq('id', pollId)
     
     if (error) {
-        // Vi returnerer eksplisitt error her
         return { success: false, error: error.message }
     }
     
     revalidatePath(`/dashboard/event/${eventId}`)
-    // Og null-error her for typesikkerhet
     return { success: true, error: null } 
 }
 
+// Oppdater spørsmål
 export async function updatePoll(formData: FormData) {
   const supabase = await createClient()
   const pollId = formData.get('pollId') as string

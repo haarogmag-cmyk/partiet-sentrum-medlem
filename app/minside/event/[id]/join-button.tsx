@@ -2,29 +2,59 @@
 
 import { useState } from 'react'
 import { joinEvent } from './actions'
-import { Button } from '@/components/ui/button' // <--- NY
+import { Button } from '@/components/ui/button'
 
-export default function JoinForm({ eventId, price, options }: { eventId: string, price: number, options: string[] }) {
+// Oppdater Props til å inkludere customQuestions
+interface Props {
+    eventId: string
+    price: number
+    options: string[]
+    customQuestions?: string[] // <--- NY
+}
+
+export default function JoinForm({ eventId, price, options, customQuestions }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async (formData: FormData) => {
     setLoading(true)
     setError(null)
+    
+    // Vi sender med en liste over spørsmålene som skjult felt, slik at serveren vet hva den skal lete etter
+    if (customQuestions) {
+        formData.append('question_keys', JSON.stringify(customQuestions));
+    }
+
     const res = await joinEvent(eventId, formData)
     setLoading(false)
     
     if (res?.error) setError(res.error)
   }
 
-  // Felles stil for input-felter
   const inputClass = "w-full p-3 bg-white border border-ps-primary/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-ps-primary/50 text-ps-text placeholder:text-ps-text/40 transition-all";
   const labelClass = "block text-xs font-bold uppercase text-ps-text/60 mb-1.5 ml-1";
 
   return (
     <form action={handleSubmit} className="space-y-5">
         
-        {/* Overnatting */}
+        {/* Egendefinerte spørsmål (Dynamisk) */}
+        {customQuestions && customQuestions.length > 0 && (
+            <div className="space-y-4 border-b border-ps-primary/10 pb-4 mb-4">
+                {customQuestions.map((q) => (
+                    <div key={q}>
+                        <label className={labelClass}>{q}</label>
+                        <input 
+                            name={`custom_q_${q}`} // Unikt navn for hvert felt
+                            className={inputClass} 
+                            required 
+                            placeholder="Ditt svar..."
+                        />
+                    </div>
+                ))}
+            </div>
+        )}
+
+        {/* Overnatting (Standard) */}
         {options && options.length > 0 && (
             <div>
                 <label className={labelClass}>Overnatting</label>
@@ -38,7 +68,7 @@ export default function JoinForm({ eventId, price, options }: { eventId: string,
             </div>
         )}
 
-        {/* Allergier */}
+        {/* Allergier (Standard) */}
         <div>
             <label className={labelClass}>Matpreferanser / Allergier</label>
             <textarea 

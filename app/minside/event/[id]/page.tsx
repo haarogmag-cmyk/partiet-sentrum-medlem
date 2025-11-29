@@ -16,12 +16,30 @@ export default async function MemberEventPage({ params }: { params: Params }) {
 
   // 1. Hent data
   const { data: event } = await supabase.from('events').select('*').eq('id', id).single()
-  const { data: participant } = await supabase.from('event_participants').select('*').eq('event_id', id).eq('user_id', user.id).single()
+  
+  // Hent påmelding for å sjekke status
+  const { data: participant } = await supabase
+    .from('event_participants')
+    .select('*')
+    .eq('event_id', id)
+    .eq('user_id', user.id)
+    .single()
 
   const isRegistered = !!participant
   
-  const documents = event.document_links ? (typeof event.document_links === 'string' ? JSON.parse(event.document_links) : event.document_links) : []
-  const accommodationOptions = event.accommodation_options ? (typeof event.accommodation_options === 'string' ? JSON.parse(event.accommodation_options) : event.accommodation_options) : []
+  // Parse JSON-data
+  const documents = event.document_links 
+    ? (typeof event.document_links === 'string' ? JSON.parse(event.document_links) : event.document_links) 
+    : []
+    
+  const accommodationOptions = event.accommodation_options 
+    ? (typeof event.accommodation_options === 'string' ? JSON.parse(event.accommodation_options) : event.accommodation_options) 
+    : []
+    
+  // Parse custom questions (NYTT)
+  const customQuestions = event.custom_questions 
+    ? (typeof event.custom_questions === 'string' ? JSON.parse(event.custom_questions) : event.custom_questions) 
+    : []
 
   // --- IKKE PÅMELDT VIEW ---
   if (!isRegistered) {
@@ -38,8 +56,14 @@ export default async function MemberEventPage({ params }: { params: Params }) {
                   </div>
                   <CardContent className="space-y-6 pt-6">
                       <p className="text-ps-text leading-relaxed">{event.description}</p>
-                      {/* Påmeldingsskjema */}
-                      <JoinForm eventId={id} price={event.price || 0} options={accommodationOptions} />
+                      
+                      {/* Påmeldingsskjema med custom questions */}
+                      <JoinForm 
+                          eventId={id} 
+                          price={event.price || 0} 
+                          options={accommodationOptions} 
+                          customQuestions={customQuestions} // <--- Sender spørsmålene ned
+                      />
                   </CardContent>
               </Card>
           </div>

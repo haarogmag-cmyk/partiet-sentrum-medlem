@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { updateEvent } from './actions' // Vi lager denne straks
+import { updateEvent } from './actions'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
@@ -108,6 +108,18 @@ export default function EditEventForm({ event }: Props) {
                             className={inputClass} 
                         />
                         <p className="text-[10px] text-slate-400 ml-1 mt-1">La stå som 0 eller tomt for gratis deltakelse.</p>
+                    </div>
+
+                    {/* PÅMELDINGSSPØRSMÅL (NY!) */}
+                    <div>
+                        <label className={labelClass}>Ekstra spørsmål ved påmelding (separer med komma)</label>
+                        <textarea 
+                            name="custom_questions_raw" 
+                            defaultValue={event.custom_questions?.join(', ')} 
+                            placeholder="F.eks: Allergier, Trenger overnatting, Transportbehov"
+                            className={inputClass} 
+                        />
+                        <p className="text-[10px] text-slate-400 ml-1 mt-1">Medlemmer må svare på disse når de melder seg på.</p>
                     </div>
 
                     {/* DIGITALT? */}

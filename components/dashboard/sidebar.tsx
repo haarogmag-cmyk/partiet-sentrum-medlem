@@ -1,18 +1,19 @@
 'use client'
 
 import Link from 'next/link'
-import { useSearchParams, usePathname } from 'next/navigation' // <--- NY IMPORT
+import { useSearchParams, usePathname } from 'next/navigation' // <--- NY IMPORT: usePathname
 
 export default function Sidebar() {
   const searchParams = useSearchParams()
-  const pathname = usePathname() // <--- NY
+  const pathname = usePathname() // <--- Henter nåværende sti (f.eks /dashboard/event/...)
+  
   const currentTab = searchParams.get('tab') || 'medlemmer'
 
   const menuItems = [
     { id: 'medlemmer', label: 'Medlemmer', icon: '👥' },
     { id: 'okonomi', label: 'Økonomi', icon: '💰' },
     { id: 'kommunikasjon', label: 'Kommunikasjon', icon: '📢' },
-    { id: 'arrangement', label: 'Arrangementer', icon: '📅' }, // <--- FIKS NAVN (Punkt 8)
+    { id: 'arrangement', label: 'Arrangementer', icon: '📅' }, // Endret label til "Arrangementer" for penere utseende
     { id: 'ressurser', label: 'Ressursbank', icon: '📂' },
     { id: 'arkiv', label: 'Styringsarkiv', icon: '🔐' },
     { id: 'innstillinger', label: 'Innstillinger', icon: '⚙️' },
@@ -34,10 +35,18 @@ export default function Sidebar() {
         <p className="px-4 text-xs font-bold text-ps-text/40 uppercase mb-2 mt-4">Oversikt</p>
         
         {menuItems.map((item) => {
-          const isActive = currentTab === item.id || (item.id === 'arrangement' && pathname.includes('/dashboard/event'))
+          // LOGIKK FOR MARKERING:
+          // 1. Hvis tab-parameteren matcher ID-en.
+          // 2. ELLER hvis vi er på "Arrangement"-fanen og URLen inneholder "/dashboard/event/" (detaljvisning).
+          const isEventPage = item.id === 'arrangement' && pathname?.includes('/dashboard/event');
+          
+          // Sjekk om vi er på dashboard-roten med riktig tab, ELLER om vi er inne på en underside for arrangement
+          const isActive = (pathname === '/dashboard' && currentTab === item.id) || isEventPage;
+
           return (
             <Link 
               key={item.id}
+              // Hvis vi klikker på linken, går vi alltid tilbake til hovedoversikten for den fanen
               href={`/dashboard?tab=${item.id}`}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
                 isActive 
