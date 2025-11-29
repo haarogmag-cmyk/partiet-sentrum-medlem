@@ -9,6 +9,7 @@ import KommunikasjonView from './tabs/kommunikasjon-view';
 import ArrangementView from './tabs/arrangement-view';
 import SettingsView from './tabs/settings-view';
 import RessursView from './tabs/ressurs-view';
+import InternArkivView from './tabs/intern-arkiv-view';
 
 // Komponenter for Medlemslisten
 import MemberFilter from './filter';
@@ -37,7 +38,7 @@ export default async function Dashboard(props: {
   if (!user) redirect('/login');
 
   // --- 1. HENT ADMIN ROLLE & HIERARKI ---
-  const { data: adminRole, error: roleError } = await supabase
+  const { data: adminRole } = await supabase
     .from('admin_roles')
     .select(`
         role, 
@@ -51,9 +52,6 @@ export default async function Dashboard(props: {
     `)
     .eq('user_id', user.id)
     .single();
-
-  // Debugging (valgfritt)
-  if (roleError && roleError.code !== 'PGRST116') console.error("Role fetch error:", roleError);
 
   const roleData = adminRole as any;
   
@@ -214,7 +212,7 @@ export default async function Dashboard(props: {
         {/* 6. INTERNT ARKIV */}
         {currentTab === 'arkiv' && (
              permissions.canViewArchive
-              ? <div className="bg-yellow-50 p-4 rounded-lg text-yellow-800 mb-4 border border-yellow-200 text-sm">🚧 Internt Arkiv-modul</div>
+              ? <InternArkivView permissions={permissions} />
               : <AccessDenied />
         )}
 
@@ -286,10 +284,9 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
   const { data: pagedMembers, count: totalCount } = await queryBuilder.order('last_name', { ascending: true }).range(startRange, endRange);
 
   // HENT ALLE ORGANISASJONER (Til både filter og rolle-modal)
-  // VIKTIG ENDRING: Henter parent_id for at filteret i økonomi-fanen skal fungere riktig
   const { data: allOrgs } = await supabase
     .from('organizations')
-    .select('id, name, level, org_type, parent_id')
+    .select('id, name, level, org_type, parent_id') // parent_id er viktig for filteret
     .order('name');
 
   const fylkeslag = allOrgs?.filter((o:any) => o.level === 'county') || [];
@@ -299,8 +296,6 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
   const totalItems = totalCount || 0;
   const totalPages = Math.ceil(totalItems / PAGE_SIZE);
 
-  const activeFilters = { ...filters, q: searchQuery, vol: volunteerFilter };
-
   // Hent tasks for CRM
   const { data: tasks } = await supabase
     .from('tasks')
@@ -308,6 +303,8 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
     .eq('status', 'pending')
     .order('due_date', { ascending: true })
     .limit(5);
+
+  const activeFilters = { ...filters, q: searchQuery, vol: volunteerFilter };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -321,7 +318,7 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
             </div>
 
             <div className="lg:col-span-2 h-full">
-                <GrowthChart />
+                <GrowthChart filters={activeFilters} /> {/* <--- HER ER ENDRINGEN: FILTRENE SENDES INN */}
             </div>
         </div>
 

@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/utils/supabase/client' // Bruker klient-versjon for live-bytte
+import { createClient } from '@/utils/supabase/client'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 
 type Period = '1w' | '1m' | '6m' | '1y' | 'all'
 
-export default function GrowthChart() {
+// Tar imot filtre fra parent
+export default function GrowthChart({ filters }: { filters: { org: string, fylke: string, lokal: string } }) {
   const [data, setData] = useState<any[]>([])
   const [period, setPeriod] = useState<Period>('1m')
   const [loading, setLoading] = useState(true)
@@ -18,7 +18,6 @@ export default function GrowthChart() {
       setLoading(true)
       const supabase = createClient()
       
-      // Beregn startdato basert på valg
       const now = new Date()
       let startDate = new Date()
       
@@ -26,14 +25,25 @@ export default function GrowthChart() {
       if (period === '1m') startDate.setMonth(now.getMonth() - 1)
       if (period === '6m') startDate.setMonth(now.getMonth() - 6)
       if (period === '1y') startDate.setFullYear(now.getFullYear() - 1)
-      if (period === 'all') startDate = new Date(2020, 0, 1) // Langt tilbake
+      if (period === 'all') startDate = new Date(2020, 0, 1)
+
+      // Vask navnene (Fjern prefiks for å matche postal_codes i databasen)
+      const cleanFylke = filters.fylke && filters.fylke !== 'alle' 
+        ? filters.fylke.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '') 
+        : null;
+        
+      const cleanLokal = filters.lokal && filters.lokal !== 'alle'
+        ? filters.lokal.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '')
+        : null;
 
       const { data: stats, error } = await supabase.rpc('get_member_stats', {
-        start_date: startDate.toISOString()
+        start_date: startDate.toISOString(),
+        filter_org_type: filters.org === 'us' ? 'us' : 'ps',
+        filter_county: cleanFylke,
+        filter_municipality: cleanLokal
       })
 
       if (stats) {
-        // Formater datoene penere for visning
         const formatted = stats.map((item: any) => ({
           ...item,
           dato: new Date(item.date_bucket).toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })
@@ -43,13 +53,13 @@ export default function GrowthChart() {
       setLoading(false)
     }
     fetchData()
-  }, [period])
+  }, [period, filters]) // Oppdater når filter endres!
 
   return (
     <Card className="h-[400px] flex flex-col">
       <CardHeader 
         title="Medlemsutvikling" 
-        description="Nye innmeldinger vs. utmeldinger"
+        description="Nye innmeldinger vs. utmeldinger i valgt utvalg"
         action={
           <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
             {['1w', '1m', '6m', '1y'].map((p) => (
@@ -68,7 +78,7 @@ export default function GrowthChart() {
       />
       <CardContent className="flex-1 min-h-0 pb-2">
         {loading ? (
-          <div className="h-full flex items-center justify-center text-slate-400 animate-pulse">Laster data...</div>
+          <div className="h-full flex items-center justify-center text-slate-400 animate-pulse">Henter tall...</div>
         ) : (
           <div className="w-full h-full text-xs">
              <ResponsiveContainer width="100%" height="100%">
