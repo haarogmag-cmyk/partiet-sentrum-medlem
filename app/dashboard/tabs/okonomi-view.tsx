@@ -162,7 +162,7 @@ export default async function OkonomiView({ filters, searchParams, user, isSuper
   }
 
   // Hent allOrgs for filteret i klienten
-  const { data: allOrgs } = await supabase.from('organizations').select('id, name, level, org_type').order('name');
+  const { data: allOrgs } = await supabase.from('organizations').select('id, name, level, org_type, parent_id').order('name');
 
   return (
       <OkonomiTabsClient 
