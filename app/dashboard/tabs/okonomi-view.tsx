@@ -174,6 +174,20 @@ export default async function OkonomiView({ filters, searchParams, user, isSuper
   // Hent allOrgs for filteret i klienten
   const { data: allOrgs } = await supabase.from('organizations').select('id, name, level, org_type, parent_id').order('name');
 
+// ... (rett før return)
+  
+  console.log("--- ØKONOMI DEBUG ---");
+  console.log("Current Org ID:", currentOrgId);
+  console.log("Current Org Name:", currentOrgName);
+  console.log("Year:", year);
+  console.log("Automatic Income Length:", automaticIncome.length);
+  if (automaticIncome.length > 0) {
+      console.log("First entry:", automaticIncome[0]);
+  } else {
+      console.log("Ingen automatisk inntekt funnet for denne orgen.");
+  }
+  console.log("Total Actual:", totalActual);
+
   return (
       <OkonomiTabsClient 
           totalActual={totalActual}
