@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { createPoll, addOption, togglePollStatus, deletePoll, updatePoll } from '@/app/minside/event/[id]/voting-actions'
+// HER ER FIKSEN: Vi importerer fra lokal fil './actions' i stedet for 'minside'
+import { createPoll, addOption, togglePollStatus, deletePoll, updatePoll } from './actions'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -9,7 +10,7 @@ import { toast } from 'sonner'
 
 export default function PollManager({ eventId, polls }: { eventId: string, polls: any[] }) {
   const [isAdding, setIsAdding] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null) // Hvilken sak redigeres?
+  const [editingId, setEditingId] = useState<string | null>(null) 
 
   // OPPRETT NY
   const handleCreate = async (formData: FormData) => {
@@ -26,7 +27,6 @@ export default function PollManager({ eventId, polls }: { eventId: string, polls
       const res = await addOption(formData)
       if (res?.error) toast.error(res.error)
       else {
-          // Tøm input feltet (litt hacky men funker uten refs)
           const form = document.getElementById(`form-opt-${formData.get('pollId')}`) as HTMLFormElement
           if(form) form.reset()
           toast.success('Alternativ lagt til')
@@ -36,7 +36,6 @@ export default function PollManager({ eventId, polls }: { eventId: string, polls
   // SLETT SAK
   const handleDelete = async (pollId: string) => {
       if(!confirm('Er du sikker på at du vil slette denne saken og alle stemmer?')) return;
-      
       const res = await deletePoll(pollId, eventId)
       if (res?.error) toast.error(res.error)
       else toast.success('Sak slettet')
@@ -62,7 +61,6 @@ export default function PollManager({ eventId, polls }: { eventId: string, polls
             </Button>
         </div>
 
-        {/* SKJEMA FOR NY SAK */}
         {isAdding && (
             <Card className="border-2 border-dashed border-ps-primary/20 bg-[#fffcf1] animate-in fade-in">
                 <CardContent className="p-6">
@@ -75,7 +73,6 @@ export default function PollManager({ eventId, polls }: { eventId: string, polls
             </Card>
         )}
 
-        {/* LISTE OVER SAKER */}
         <div className="space-y-4">
             {polls.map(poll => {
                 const totalVotes = poll.options.reduce((sum:any, opt:any) => sum + opt.votes[0].count, 0)
@@ -84,10 +81,8 @@ export default function PollManager({ eventId, polls }: { eventId: string, polls
                 return (
                     <Card key={poll.id} className={`transition-all ${poll.is_active ? "border-green-500 border-2 shadow-md" : "border-slate-200"}`}>
                         
-                        {/* HEADER: SPØRSMÅL OG KNAPPER */}
                         <div className="p-4 border-b bg-slate-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             
-                            {/* REDIGERINGS-MODUS */}
                             {isEditing ? (
                                 <form action={handleUpdate} className="flex-1 flex gap-2 w-full">
                                     <input type="hidden" name="pollId" value={poll.id} />
@@ -102,14 +97,12 @@ export default function PollManager({ eventId, polls }: { eventId: string, polls
                                     <Button type="button" size="sm" variant="ghost" onClick={() => setEditingId(null)}>Avbryt</Button>
                                 </form>
                             ) : (
-                                /* VISNINGS-MODUS */
                                 <div className="flex-1">
                                     <div className="font-bold text-lg text-ps-text">{poll.question}</div>
                                     <div className="text-xs text-slate-500">Totalt stemmer: {totalVotes}</div>
                                 </div>
                             )}
 
-                            {/* KNAPPER (Start/Stopp, Rediger, Slett) */}
                             {!isEditing && (
                                 <div className="flex items-center gap-2">
                                     {poll.is_active ? <Badge variant="success">ÅPEN</Badge> : <Badge variant="neutral">STENGT</Badge>}
@@ -122,7 +115,6 @@ export default function PollManager({ eventId, polls }: { eventId: string, polls
                                         {poll.is_active ? 'Stopp' : 'Start'}
                                     </Button>
 
-                                    {/* Rediger og Slett (Kun tilgjengelig når saken er stengt for å unngå kaos) */}
                                     {!poll.is_active && (
                                         <>
                                             <Button size="sm" variant="outline" onClick={() => setEditingId(poll.id)} title="Rediger tekst">
@@ -137,7 +129,6 @@ export default function PollManager({ eventId, polls }: { eventId: string, polls
                             )}
                         </div>
 
-                        {/* INNHOLD: ALTERNATIVER */}
                         <CardContent className="p-4 space-y-4">
                             {poll.options.map((opt: any) => {
                                 const percent = totalVotes > 0 ? Math.round((opt.votes[0].count / totalVotes) * 100) : 0
@@ -154,7 +145,6 @@ export default function PollManager({ eventId, polls }: { eventId: string, polls
                                 )
                             })}
 
-                            {/* Legg til alternativ (kun hvis stengt og ikke redigerer tittel) */}
                             {!poll.is_active && !isEditing && (
                                 <form id={`form-opt-${poll.id}`} action={handleOption} className="flex gap-2 mt-4 pt-4 border-t border-slate-100">
                                     <input type="hidden" name="pollId" value={poll.id} />
@@ -167,12 +157,6 @@ export default function PollManager({ eventId, polls }: { eventId: string, polls
                     </Card>
                 )
             })}
-            
-            {polls.length === 0 && (
-                <div className="text-center p-8 text-slate-400 italic border-2 border-dashed border-slate-200 rounded-xl">
-                    Ingen saker opprettet ennå.
-                </div>
-            )}
         </div>
     </div>
   )

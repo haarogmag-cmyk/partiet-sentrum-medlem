@@ -3,75 +3,9 @@
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-// LEGG TIL NY SAK (POLL)
-export async function createPoll(formData: FormData) {
-  const supabase = await createClient()
-  const eventId = formData.get('eventId') as string
-  const question = formData.get('question') as string
-  
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Unauthorized')
+// --- ARRANGEMENT ---
 
-  const { data: poll, error } = await supabase
-    .from('polls')
-    .insert({
-      event_id: eventId,
-      question,
-      is_active: false, 
-      is_secret: true
-    })
-    .select()
-    .single()
-
-  if (error) return { error: error.message }
-
-  revalidatePath(`/dashboard/event/${eventId}`)
-  return { success: true, pollId: poll.id }
-}
-
-// LEGG TIL ALTERNATIV (KANDIDAT)
-export async function addOption(formData: FormData) {
-  const supabase = await createClient()
-  const pollId = formData.get('pollId') as string
-  const text = formData.get('text') as string
-  const eventId = formData.get('eventId') as string 
-
-  const { error } = await supabase
-    .from('poll_options')
-    .insert({ poll_id: pollId, text })
-
-  if (error) return { error: error.message }
-
-  revalidatePath(`/dashboard/event/${eventId}`)
-  return { success: true }
-}
-
-// ÅPNE/LUKKE AVSTEMNING
-export async function togglePollStatus(pollId: string, isActive: boolean, eventId: string) {
-  const supabase = await createClient()
-  
-  const { error } = await supabase
-    .from('polls')
-    .update({ is_active: isActive })
-    .eq('id', pollId)
-
-  if (error) return { error: error.message }
-
-  revalidatePath(`/dashboard/event/${eventId}`)
-  revalidatePath(`/minside/event/${eventId}/vote`) 
-  return { success: true }
-}
-
-// SLETT SAK
-export async function deletePoll(pollId: string, eventId: string) {
-    const supabase = await createClient()
-    const { error } = await supabase.from('polls').delete().eq('id', pollId)
-    if (error) return { error: error.message }
-    revalidatePath(`/dashboard/event/${eventId}`)
-    return { success: true }
-}   
-
-// OPPDATER ARRANGEMENT (REDIGERING)
+// Oppdater arrangement (Redigering)
 export async function updateEvent(formData: FormData) {
   const supabase = await createClient()
   
@@ -104,12 +38,12 @@ export async function updateEvent(formData: FormData) {
   }
 
   revalidatePath(`/dashboard/event/${id}`)
-  revalidatePath('/dashboard')
-  revalidatePath('/minside')
+  revalidatePath('/dashboard') // Oppdater oversikten
+  revalidatePath('/minside') // Oppdater medlemsvisningen
   return { success: true }
 }
 
-// PUBLISERING (TOGGLE)
+// Publisering (Toggle)
 export async function togglePublishEvent(eventId: string, isPublished: boolean) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -125,21 +59,80 @@ export async function togglePublishEvent(eventId: string, isPublished: boolean) 
   revalidatePath(`/dashboard/event/${eventId}`)
   revalidatePath('/dashboard')
   revalidatePath('/minside')
-  revalidatePath('/') 
   return { success: true }
 }
 
-// NY: OPPDATER SPØRSMÅL (DEN SOM MANGLET!)
+// --- VOTERINGER (POLLS) ---
+
+export async function createPoll(formData: FormData) {
+  const supabase = await createClient()
+  const eventId = formData.get('eventId') as string
+  const question = formData.get('question') as string
+  
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const { data: poll, error } = await supabase
+    .from('polls')
+    .insert({
+      event_id: eventId,
+      question,
+      is_active: false, 
+      is_secret: true
+    })
+    .select()
+    .single()
+
+  if (error) return { error: error.message }
+
+  revalidatePath(`/dashboard/event/${eventId}`)
+  return { success: true, pollId: poll.id }
+}
+
+export async function addOption(formData: FormData) {
+  const supabase = await createClient()
+  const pollId = formData.get('pollId') as string
+  const text = formData.get('text') as string
+  const eventId = formData.get('eventId') as string 
+
+  const { error } = await supabase.from('poll_options').insert({ poll_id: pollId, text })
+
+  if (error) return { error: error.message }
+
+  revalidatePath(`/dashboard/event/${eventId}`)
+  return { success: true }
+}
+
+export async function togglePollStatus(pollId: string, isActive: boolean, eventId: string) {
+  const supabase = await createClient()
+  await supabase.from('polls').update({ is_active: isActive }).eq('id', pollId)
+  revalidatePath(`/dashboard/event/${eventId}`)
+  revalidatePath(`/minside/event/${eventId}/vote`) 
+  return { success: true }
+}
+
+// Slett sak (Oppdatert med sikker returtype)
+export async function deletePoll(pollId: string, eventId: string) {
+    const supabase = await createClient()
+    const { error } = await supabase.from('polls').delete().eq('id', pollId)
+    
+    if (error) {
+        // Vi returnerer eksplisitt error her
+        return { success: false, error: error.message }
+    }
+    
+    revalidatePath(`/dashboard/event/${eventId}`)
+    // Og null-error her for typesikkerhet
+    return { success: true, error: null } 
+}
+
 export async function updatePoll(formData: FormData) {
   const supabase = await createClient()
   const pollId = formData.get('pollId') as string
   const question = formData.get('question') as string
   const eventId = formData.get('eventId') as string
 
-  const { error } = await supabase
-    .from('polls')
-    .update({ question })
-    .eq('id', pollId)
+  const { error } = await supabase.from('polls').update({ question }).eq('id', pollId)
 
   if (error) return { error: error.message }
 
