@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 export default async function Home() {
   const supabase = await createClient();
   
-  // 1. Hent fylkeslag
+  // 1. Hent alle fylkeslag
   const { data: fylkeslag } = await supabase
     .from('organizations')
     .select('id, name')
@@ -15,7 +15,7 @@ export default async function Home() {
     .eq('org_type', 'ps') 
     .order('name');
 
-  // 2. Hent arrangementer
+  // 2. Hent kommende OFFENTLIGE arrangementer
   const { data: events } = await supabase
     .from('events')
     .select('*')
@@ -40,14 +40,20 @@ export default async function Home() {
                 
                 <div className="flex flex-wrap gap-4">
                     <Link href="/bli-medlem">
-                        {/* FIKS: Hvit bakgrunn, rød tekst, rød kantlinje. Hover: Rød bakgrunn, hvit tekst. */}
-                        <Button className="bg-white text-[#c93960] border-2 border-[#c93960] font-bold py-6 px-8 text-lg shadow-xl hover:bg-[#c93960] hover:text-white hover:border-white transition-colors">
+                        {/* FIKS PS BLI MEDLEM: 
+                           Vanlig: Hvit bakgrunn, Sentrum-rød tekst, Sentrum-rød kant (synlig mot hvit bakgrunn, men her er bakgrunnen rød, så vi bruker hvit kant for å poppe)
+                           Endring etter ønske: Hvit bakgrunn, Rød tekst.
+                        */}
+                        <Button className="bg-white text-[#c93960] border-2 border-white font-bold py-6 px-8 text-lg shadow-xl hover:bg-[#c93960] hover:text-white hover:border-white transition-colors">
                             Bli medlem →
                         </Button>
                     </Link>
                     <Link href="/login">
-                        {/* Logg inn knapp (uendret) */}
-                        <Button variant="outline" className="bg-transparent border-2 border-white text-white hover:bg-white hover:text-[#c93960] py-6 px-8 text-lg font-medium transition-colors">
+                        {/* FIKS PS LOGG INN:
+                           Vanlig: Transparent, Hvit kant, Hvit tekst.
+                           Hover: Hvit bakgrunn, Sentrum-rød kant (#c93960), Rød tekst.
+                        */}
+                        <Button variant="outline" className="bg-transparent border-2 border-white text-white py-6 px-8 text-lg font-medium hover:bg-white hover:text-[#c93960] hover:border-[#c93960] transition-colors">
                             Logg inn
                         </Button>
                     </Link>
@@ -55,7 +61,7 @@ export default async function Home() {
             </div>
         </div>
 
-        {/* HØYRE: UNGE SENTRUM (LILLA) - Denne var allerede OK */}
+        {/* HØYRE: UNGE SENTRUM (LILLA) */}
         <div className="relative bg-gradient-to-br from-[#8a63d2] to-[#5e1639] text-white p-10 md:p-20 flex flex-col justify-center items-end text-right overflow-hidden">
             <div className="relative z-10 max-w-lg animate-in fade-in slide-in-from-right duration-700 delay-150">
                 <h1 className="text-5xl md:text-7xl font-black tracking-tight mb-6 text-[#E0CFFC]">Unge Sentrum</h1>
@@ -65,12 +71,20 @@ export default async function Home() {
                 
                 <div className="flex flex-wrap gap-4 justify-end">
                     <Link href="/bli-medlem">
+                        {/* FIKS US BLI MEDLEM:
+                           Vanlig: Lys lilla bakgrunn (#E0CFFC), Mørk tekst (#5e1639).
+                           Hover: Hvit bakgrunn, Sentrum-rød tekst (#c93960), Sentrum-rød kant.
+                        */}
                         <Button className="bg-[#E0CFFC] text-[#5e1639] border-2 border-[#E0CFFC] font-bold py-6 px-8 text-lg shadow-xl hover:bg-white hover:text-[#c93960] hover:border-[#c93960] transition-colors">
                             Bli US-medlem →
                         </Button>
                     </Link>
                     <Link href="/login">
-                        <Button variant="outline" className="bg-transparent border-2 border-[#E0CFFC] text-[#E0CFFC] hover:bg-[#E0CFFC] hover:text-[#5e1639] py-6 px-8 text-lg font-medium transition-colors">
+                        {/* FIKS US LOGG INN:
+                           Vanlig: Transparent, Hvit kant, Hvit tekst.
+                           Hover: Hvit bakgrunn, Hvit kant, Sentrum-rød tekst (#c93960).
+                        */}
+                        <Button variant="outline" className="bg-transparent border-2 border-white text-white py-6 px-8 text-lg font-medium hover:bg-white hover:text-[#c93960] hover:border-white transition-colors">
                             Logg inn
                         </Button>
                     </Link>
@@ -79,10 +93,7 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* ... Resten av siden (Arrangementer, Fylkeslag, Footer) er lik ... */}
-      {/* ... (Kopier inn resten fra forrige svar hvis du trenger det, eller bare bytt ut Hero-seksjonen) ... */}
-      
-      {/* ARRANGEMENTER */}
+      {/* --- ARRANGEMENTER --- */}
       {events && events.length > 0 && (
           <section className="py-20 px-4 bg-slate-50">
             <div className="max-w-6xl mx-auto w-full">
@@ -120,7 +131,7 @@ export default async function Home() {
           </section>
       )}
 
-      {/* FYLKESLAG */}
+      {/* --- FYLKESLAG --- */}
       <section className="py-20 px-4 bg-white">
         <div className="max-w-6xl mx-auto w-full text-center">
             <h2 className="text-3xl font-bold text-ps-text mb-4">Våre Fylkeslag</h2>
@@ -144,7 +155,7 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* FOOTER */}
+      {/* --- FOOTER --- */}
       <footer className="py-12 bg-slate-100 border-t border-slate-200">
         <div className="max-w-4xl mx-auto text-center space-y-6">
             <div>
