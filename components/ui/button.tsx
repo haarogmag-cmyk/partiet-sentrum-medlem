@@ -1,8 +1,9 @@
 import React from "react";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "us" | "danger" | "outline" | "ghost";
-  size?: "sm" | "md" | "lg"; // <--- NYTT: Vi legger til size i definisjonen
+  // Legg til 'success' her
+  variant?: "primary" | "secondary" | "us" | "danger" | "outline" | "ghost" | "success";
+  size?: "sm" | "md" | "lg";
   isLoading?: boolean;
 }
 
@@ -11,7 +12,6 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     
     const baseStyles = "inline-flex items-center justify-center rounded-xl font-bold transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]";
     
-    // Definer størrelsene her
     const sizeStyles = {
         sm: "px-3 py-1.5 text-xs",
         md: "px-5 py-2.5 text-sm",
@@ -24,6 +24,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       secondary: "bg-white text-ps-text border border-ps-primary/20 hover:bg-ps-primary/5",
       outline: "border-2 border-ps-primary text-ps-primary hover:bg-ps-primary/5",
       danger: "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500",
+      // NY VARIANT: SUCCESS (Grønn)
+      success: "bg-green-600 text-white hover:bg-green-700 focus:ring-green-500 shadow-md",
       ghost: "text-ps-text/70 hover:text-ps-text hover:bg-ps-primary/5 bg-transparent shadow-none",
     };
 
@@ -31,7 +33,6 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         disabled={disabled || isLoading}
-        // Her bruker vi sizeStyles[size] for å hente riktig klasse
         className={`${baseStyles} ${sizeStyles[size]} ${variants[variant]} ${className}`}
         {...props}
       >

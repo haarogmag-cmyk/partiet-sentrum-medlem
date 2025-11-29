@@ -1,17 +1,18 @@
 'use client'
 
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, usePathname } from 'next/navigation' // <--- NY IMPORT
 
 export default function Sidebar() {
   const searchParams = useSearchParams()
+  const pathname = usePathname() // <--- NY
   const currentTab = searchParams.get('tab') || 'medlemmer'
 
   const menuItems = [
     { id: 'medlemmer', label: 'Medlemmer', icon: '👥' },
     { id: 'okonomi', label: 'Økonomi', icon: '💰' },
     { id: 'kommunikasjon', label: 'Kommunikasjon', icon: '📢' },
-    { id: 'arrangement', label: 'Arrangement & Valg', icon: '📅' },
+    { id: 'arrangement', label: 'Arrangementer', icon: '📅' }, // <--- FIKS NAVN (Punkt 8)
     { id: 'ressurser', label: 'Ressursbank', icon: '📂' },
     { id: 'arkiv', label: 'Styringsarkiv', icon: '🔐' },
     { id: 'innstillinger', label: 'Innstillinger', icon: '⚙️' },
@@ -33,7 +34,7 @@ export default function Sidebar() {
         <p className="px-4 text-xs font-bold text-ps-text/40 uppercase mb-2 mt-4">Oversikt</p>
         
         {menuItems.map((item) => {
-          const isActive = currentTab === item.id
+          const isActive = currentTab === item.id || (item.id === 'arrangement' && pathname.includes('/dashboard/event'))
           return (
             <Link 
               key={item.id}

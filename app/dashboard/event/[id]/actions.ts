@@ -9,7 +9,6 @@ export async function createPoll(formData: FormData) {
   const eventId = formData.get('eventId') as string
   const question = formData.get('question') as string
   
-  // Sjekk admin
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Unauthorized')
 
@@ -18,7 +17,7 @@ export async function createPoll(formData: FormData) {
     .insert({
       event_id: eventId,
       question,
-      is_active: false, // Starter alltid som lukket
+      is_active: false, 
       is_secret: true
     })
     .select()
@@ -35,7 +34,7 @@ export async function addOption(formData: FormData) {
   const supabase = await createClient()
   const pollId = formData.get('pollId') as string
   const text = formData.get('text') as string
-  const eventId = formData.get('eventId') as string // For revalidatePath
+  const eventId = formData.get('eventId') as string 
 
   const { error } = await supabase
     .from('poll_options')
@@ -51,8 +50,6 @@ export async function addOption(formData: FormData) {
 export async function togglePollStatus(pollId: string, isActive: boolean, eventId: string) {
   const supabase = await createClient()
   
-  // Hvis vi åpner en sak, bør vi kanskje stenge alle andre? 
-  // For nå gjør vi det enkelt: Bare endre status på denne.
   const { error } = await supabase
     .from('polls')
     .update({ is_active: isActive })
@@ -61,6 +58,7 @@ export async function togglePollStatus(pollId: string, isActive: boolean, eventI
   if (error) return { error: error.message }
 
   revalidatePath(`/dashboard/event/${eventId}`)
+  revalidatePath(`/minside/event/${eventId}/vote`) 
   return { success: true }
 }
 
@@ -73,40 +71,78 @@ export async function deletePoll(pollId: string, eventId: string) {
     return { success: true }
 }   
 
-// NY: Oppdater arrangement (Info + Publisering)
+// OPPDATER ARRANGEMENT (REDIGERING)
 export async function updateEvent(formData: FormData) {
   const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Unauthorized')
 
-  const eventId = formData.get('eventId') as string
-  
-  const updates = {
-    title: formData.get('title') as string,
-    description: formData.get('description') as string,
-    location: formData.get('location') as string,
-    start_time: formData.get('start_time') as string,
-    price: Number(formData.get('price')) || 0,
-    // Håndter checkbox for publisering
-    is_published: formData.get('is_published') === 'on',
-    // Håndter JSON-lister
-    accommodation_options: JSON.parse(formData.get('accommodation_options') as string || '[]'),
-    document_links: JSON.parse(formData.get('document_links') as string || '[]'),
-  }
+  const id = formData.get('id') as string
+  const title = formData.get('title') as string
+  const description = formData.get('description') as string
+  const startTime = formData.get('start_time') as string
+  const location = formData.get('location') as string
+  const price = Number(formData.get('price')) || 0
+  const isDigital = formData.get('is_digital') === 'on'
 
   const { error } = await supabase
     .from('events')
-    .update(updates)
-    .eq('id', eventId)
+    .update({
+        title,
+        description,
+        start_time: startTime,
+        location,
+        price,
+        is_digital: isDigital
+    })
+    .eq('id', id)
 
   if (error) {
-    console.error('Update event error:', error)
-    return { error: error.message }
+      console.error('Update event error:', error)
+      return { error: 'Kunne ikke oppdatere arrangementet.' }
   }
 
+  revalidatePath(`/dashboard/event/${id}`)
+  revalidatePath('/dashboard')
+  revalidatePath('/minside')
+  return { success: true }
+}
+
+// PUBLISERING (TOGGLE)
+export async function togglePublishEvent(eventId: string, isPublished: boolean) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const { error } = await supabase
+    .from('events')
+    .update({ is_published: isPublished })
+    .eq('id', eventId)
+
+  if (error) return { error: error.message }
+
   revalidatePath(`/dashboard/event/${eventId}`)
-  revalidatePath('/dashboard') // Oppdater listen i dashboard
-  revalidatePath('/minside')   // Oppdater listen for medlemmer
+  revalidatePath('/dashboard')
+  revalidatePath('/minside')
+  revalidatePath('/') 
+  return { success: true }
+}
+
+// NY: OPPDATER SPØRSMÅL (DEN SOM MANGLET!)
+export async function updatePoll(formData: FormData) {
+  const supabase = await createClient()
+  const pollId = formData.get('pollId') as string
+  const question = formData.get('question') as string
+  const eventId = formData.get('eventId') as string
+
+  const { error } = await supabase
+    .from('polls')
+    .update({ question })
+    .eq('id', pollId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath(`/dashboard/event/${eventId}`)
   return { success: true }
 }

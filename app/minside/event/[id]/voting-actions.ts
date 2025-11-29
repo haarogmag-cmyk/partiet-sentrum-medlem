@@ -4,21 +4,21 @@ import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
 
 // Opprett ny sak (Admin)
-export async function createPoll(formData: FormData) {
+export async function updatePoll(formData: FormData) {
   const supabase = await createClient()
-  const eventId = formData.get('eventId') as string
+  const pollId = formData.get('pollId') as string
   const question = formData.get('question') as string
-  
-  const { data: poll, error } = await supabase
+  const eventId = formData.get('eventId') as string
+
+  const { error } = await supabase
     .from('polls')
-    .insert({ event_id: eventId, question, is_active: false })
-    .select()
-    .single()
+    .update({ question })
+    .eq('id', pollId)
 
   if (error) return { error: error.message }
-  
+
   revalidatePath(`/dashboard/event/${eventId}`)
-  return { success: true, pollId: poll.id }
+  return { success: true }
 }
 
 // Legg til alternativ (Admin)

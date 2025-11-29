@@ -14,22 +14,43 @@ export default async function VotingPage({ params }: { params: Params }) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // 1. Sjekk at brukeren er påmeldt og har betalt (Stemmerett)
-  const { data: participation } = await supabase
-    .from('event_participants')
-    .select('status, payment_status')
-    .eq('event_id', id)
+  // 1. Sjekk om brukeren er ADMIN (VIP-tilgang)
+  const { data: adminRole } = await supabase
+    .from('admin_roles')
+    .select('role')
     .eq('user_id', user.id)
-    .single()
+    .single();
 
-  // Hvis ikke påmeldt eller ikke betalt -> Ingen adgang
-  // (Du kan justere reglene her, f.eks. om gratis arrangementer gir stemmerett)
-  if (!participation || participation.payment_status !== 'paid') {
+  const isAdmin = adminRole && ['superadmin', 'leader', 'deputy_leader'].includes(adminRole.role);
+
+  // 2. Sjekk om brukeren er påmeldt og har betalt (Stemmerett)
+  // (Hvis admin, hopper vi over denne sjekken)
+  let hasVotingRights = isAdmin; // Admins har alltid tilgang til å se
+
+  if (!isAdmin) {
+      const { data: participation } = await supabase
+        .from('event_participants')
+        .select('status, payment_status')
+        .eq('event_id', id)
+        .eq('user_id', user.id)
+        .single()
+      
+      // Må være påmeldt og betalt (eller gratis event)
+      // Her kan du justere logikken, f.eks. sjekke om event.price == 0
+      if (participation && participation.payment_status === 'paid') {
+          hasVotingRights = true;
+      }
+  }
+
+  // Hvis ingen tilgang -> Vis feilmelding
+  if (!hasVotingRights) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-[#fffcf1] p-4">
             <Card className="max-w-md text-center p-6 border-red-200 bg-red-50">
                 <h1 className="text-xl font-bold text-red-800 mb-2">Ingen stemmerett</h1>
-                <p className="text-sm text-red-700 mb-4">Du må være påmeldt og ha betalt deltakeravgiften for å delta i voteringer.</p>
+                <p className="text-sm text-red-700 mb-4">
+                    Du må være påmeldt og ha betalt deltakeravgiften for å delta i voteringer.
+                </p>
                 <Link href={`/minside/event/${id}`}>
                     <Button variant="secondary">Gå tilbake til arrangementet</Button>
                 </Link>
@@ -38,10 +59,10 @@ export default async function VotingPage({ params }: { params: Params }) {
       )
   }
 
-  // 2. Hent arrangement info
+  // 3. Hent arrangement info
   const { data: event } = await supabase.from('events').select('title').eq('id', id).single()
 
-  // 3. Hent aktive saker (polls) og svaralternativer
+  // 4. Hent aktive saker (polls)
   const { data: polls } = await supabase
     .from('polls')
     .select(`
@@ -49,10 +70,10 @@ export default async function VotingPage({ params }: { params: Params }) {
         options:poll_options(*)
     `)
     .eq('event_id', id)
-    .eq('is_active', true) // Vi viser kun åpne saker i valglokalet
+    .eq('is_active', true) 
     .order('created_at', { ascending: false })
 
-  // 4. Sjekk hva brukeren allerede har stemt på
+  // 5. Sjekk hva brukeren allerede har stemt på
   const { data: myVotes } = await supabase
     .from('votes')
     .select('poll_id')
@@ -70,6 +91,7 @@ export default async function VotingPage({ params }: { params: Params }) {
                     <div className="flex items-center gap-2 text-sm opacity-60 mb-1">
                         <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                         Digitalt Valglokale
+                        {isAdmin && <span className="text-xs bg-yellow-100 px-1 rounded border border-yellow-300 text-yellow-800 ml-2">Admin-tilgang</span>}
                     </div>
                     <h1 className="text-2xl font-black">{event?.title}</h1>
                 </div>
@@ -97,13 +119,13 @@ export default async function VotingPage({ params }: { params: Params }) {
                     <div className="text-6xl mb-4">☕</div>
                     <h3 className="text-xl font-bold mb-2">Ingen åpne saker</h3>
                     <p className="text-slate-500">Vent til møteleder åpner neste votering.</p>
-                    <Button 
-                        variant="outline" 
-                        className="mt-6"
-                        onClick={() => { /* Vi trenger en client component for reload, eller bare be brukeren refreshe */ }}
-                    >
-                        Last inn på nytt ↻
-                    </Button>
+                    
+                    {/* Reload knapp (enkel løsning uten client component wrapper for nå) */}
+                    <div className="mt-6">
+                        <a href={`/minside/event/${id}/vote`} className="px-4 py-2 border rounded bg-white hover:bg-slate-50 text-sm font-bold">
+                            Last inn på nytt ↻
+                        </a>
+                    </div>
                 </div>
             )}
             
