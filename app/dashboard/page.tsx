@@ -10,7 +10,7 @@ import ArrangementView from './tabs/arrangement-view';
 import SettingsView from './tabs/settings-view';
 import RessursView from './tabs/ressurs-view';
 
-// Komponenter for Medlemslisten
+// Komponenter
 import MemberFilter from './filter';
 import Pagination from './pagination';
 import DashboardTable from './dashboard-table';
@@ -181,10 +181,10 @@ export default async function Dashboard(props: {
             permissions.canManageEconomy 
               ? <OkonomiView 
                   filters={economyFilters}
-                  searchParams={searchParams}  // <--- NYTT
-                  user={user}                  // <--- NYTT
-                  isSuperAdmin={isSuperAdmin}  // <--- NYTT
-                  userRole={userRole}          // <--- NYTT
+                  searchParams={searchParams}
+                  user={user}
+                  isSuperAdmin={isSuperAdmin}
+                  userRole={userRole}
                 />
               : <AccessDenied />
         )}
@@ -291,7 +291,10 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
   const totalItems = totalCount || 0;
   const totalPages = Math.ceil(totalItems / PAGE_SIZE);
 
-  // Hent tasks for CRM
+  // --- HENT CRM OPPGAVER ---
+  // Vi henter oppgaver som tilhører adminens kontekst
+  // For superadmin: Hent alt. For andre: Hent det som er relevant.
+  // Her bruker vi RLS til å filtrere (så vi henter bare 'all' fra tasks tabellen og stoler på databasen)
   const { data: tasks } = await supabase
     .from('tasks')
     .select('*, member:members(phone, email)')
@@ -304,19 +307,23 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
         
+        {/* SEKSJON 1: KPI & GRAFIKK */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="space-y-4">
                 <StatsCard title="Totalt i utvalg" count={totalItems} />
                 <StatsCard title="Betalende (PS)" count={memberList.filter((m:any) => m.payment_status_ps === 'active').length} variant="success" />
                 <StatsCard title="Ubetalt (PS)" count={memberList.filter((m:any) => m.payment_status_ps !== 'active').length} variant="danger" />
             </div>
+
             <div className="lg:col-span-2 h-full">
                 <GrowthChart />
             </div>
         </div>
 
+        {/* SEKSJON 2: CRM OPPGAVER (Send data til widget) */}
         {tasks && tasks.length > 0 && <TasksWidget tasks={tasks} />}
 
+        {/* SEKSJON 3: MEDLEMSLISTE */}
         <div className="space-y-4">
             <MemberFilter 
                 fylkeslag={fylkeslag} 

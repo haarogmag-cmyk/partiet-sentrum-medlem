@@ -3,13 +3,13 @@ import OkonomiTabsClient from './okonomi-tabs-client'
 
 const MEMBERSHIP_PRICES: any = { 'ordinary_low': 100, 'ordinary_mid': 200, 'ordinary_high': 500 }
 
+// HER ER ENDRINGEN: Vi legger til de manglende propsene i interface
 interface Props {
     filters?: {
         org: string
         fylke: string
         lokal: string
     }
-    // NYE PROPS SOM DASHBOARD SENDER:
     searchParams: any
     user: any
     isSuperAdmin: boolean
@@ -19,18 +19,27 @@ interface Props {
 export default async function OkonomiView({ filters, searchParams, user, isSuperAdmin, userRole }: Props) {
   const supabase = await createClient()
 
-  // Bestem orgType basert på filteret
-  const orgType = filters?.org === 'us' ? 'us' : 'ps'; 
+  // Bestem orgType basert på filteret (PS er default)
+  // Hvis Superadmin, sjekk URL params 'eco_org' først
+  let orgType = filters?.org === 'us' ? 'us' : 'ps'; 
+  if (isSuperAdmin && searchParams?.eco_org) {
+      orgType = searchParams.eco_org;
+  }
 
+  // --- HJELPEFUNKSJON FOR FILTER ---
   const applyFilters = (query: any) => {
       if (orgType === 'us') {
           query = query.contains('membership_type', { youth: true });
       }
-      if (filters?.fylke && filters.fylke !== 'alle') {
-          query = query.eq('fylkeslag_navn', filters.fylke);
+      // Bruk eco-params for superadmin drill-down, ellers filters
+      const activeFylke = (isSuperAdmin && searchParams?.eco_fylke) ? searchParams.eco_fylke : filters?.fylke;
+      const activeLokal = (isSuperAdmin && searchParams?.eco_lokal) ? searchParams.eco_lokal : filters?.lokal;
+
+      if (activeFylke && activeFylke !== 'alle') {
+          query = query.eq('fylkeslag_navn', activeFylke);
       }
-      if (filters?.lokal && filters.lokal !== 'alle') {
-          query = query.eq('lokallag_navn', filters.lokal);
+      if (activeLokal && activeLokal !== 'alle') {
+          query = query.eq('lokallag_navn', activeLokal);
       }
       return query;
   }
@@ -87,15 +96,19 @@ export default async function OkonomiView({ filters, searchParams, user, isSuper
   let currentOrgName = "";
   let currentLevel = 'national';
 
-  if (filters?.lokal && filters.lokal !== 'alle') {
-      const { data } = await supabase.from('organizations').select('id, name').eq('name', filters.lokal).single();
+  // Bestem aktivt fylke/lokal basert på hvem som ser på (Superadmin vs Leder)
+  const activeLokal = (isSuperAdmin && searchParams?.eco_lokal) ? searchParams.eco_lokal : (filters?.lokal !== 'alle' ? filters?.lokal : null);
+  const activeFylke = (isSuperAdmin && searchParams?.eco_fylke) ? searchParams.eco_fylke : (filters?.fylke !== 'alle' ? filters?.fylke : null);
+
+  if (activeLokal) {
+      const { data } = await supabase.from('organizations').select('id, name').eq('name', activeLokal).single();
       currentOrgId = data?.id; currentOrgName = data?.name || ""; currentLevel = 'local';
-  } else if (filters?.fylke && filters.fylke !== 'alle') {
-      const { data } = await supabase.from('organizations').select('id, name').eq('name', filters.fylke).single();
+  } else if (activeFylke) {
+      const { data } = await supabase.from('organizations').select('id, name').eq('name', activeFylke).single();
       currentOrgId = data?.id; currentOrgName = data?.name || ""; currentLevel = 'county';
   } else {
-      const targetType = filters?.org === 'us' ? 'us' : 'ps'; 
-      const { data } = await supabase.from('organizations').select('id, name').eq('level', 'national').eq('org_type', targetType).maybeSingle();
+      // Nasjonalt nivå
+      const { data } = await supabase.from('organizations').select('id, name').eq('level', 'national').eq('org_type', orgType).maybeSingle();
       if (data) {
           currentOrgId = data.id;
           currentOrgName = data.name;
@@ -120,37 +133,36 @@ export default async function OkonomiView({ filters, searchParams, user, isSuper
   }
   const fullAccounting = [...manualEntries, ...automaticIncome];
 
-  // 5. HENT DATA FOR NAVIGASJON OG HELSE
-  // Vi henter allOrgs her for å sende til filteret i klienten
-  const { data: allOrgs } = await supabase.from('organizations').select('id, name, level, org_type').order('name');
-
-  // Hent "Barn" (Drill-down)
-  let childrenOrgs: any[] = [];
-  if (currentLevel === 'national') {
-      childrenOrgs = allOrgs?.filter((o:any) => o.level === 'county' && o.org_type === orgType) || [];
-  } else if (currentLevel === 'county' && currentOrgId) {
-      // Vi må gjøre et nytt søk for å finne barn basert på parent_id hvis vi vil være presise,
-      // eller vi kan bruke navne-matching mot allOrgs vi allerede har hentet.
-      // For enkelhets skyld bruker vi navne-matching her siden allOrgs allerede er lastet.
-      const shortFylkeName = currentOrgName.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
-      childrenOrgs = allOrgs?.filter((o:any) => o.level === 'local' && o.org_type === orgType && o.name.includes(shortFylkeName)) || [];
-  }
-
-  // 6. HELSE-STATISTIKK
+  // 5. HELSE-STATISTIKK (Med Drill-Down)
   let healthStats: any[] = [];
-  if (isSuperAdmin) {
-      let query = supabase.from('organization_financial_summary').select('*').eq('org_type', orgType).order('actual_income', { ascending: false });
-      
-      if (currentLevel === 'national') query = query.eq('level', 'county');
-      else if (currentLevel === 'county') {
-          const shortName = currentOrgName.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
-          query = query.eq('level', 'local').ilike('org_name', `%${shortName}%`);
-      } else {
-           query = query.eq('id', '00000000-0000-0000-0000-000000000000');
+  
+  // Vi viser kun helse-statistikk hvis vi ikke er på bunnivå (lokal)
+  if (currentLevel !== 'local') {
+    
+      let healthQuery = supabase
+          .from('organization_financial_summary')
+          .select('*')
+          .eq('org_type', orgType)
+          .order('actual_income', { ascending: false });
+
+      if (currentLevel === 'national') {
+          // Vis alle FYLKESLAG
+          healthQuery = healthQuery.eq('level', 'county');
+      } else if (currentLevel === 'county') {
+          // Vis alle LOKALLAG under dette fylket
+          const { data: childOrgs } = await supabase.from('organizations').select('id').eq('parent_id', currentOrgId); 
+          const childIds = childOrgs?.map(o => o.id) || [];
+          
+          if (childIds.length > 0) healthQuery = healthQuery.in('org_id', childIds);
+          else healthQuery = healthQuery.eq('org_id', '00000000-0000-0000-0000-000000000000'); 
       }
-      const { data } = await query;
-      healthStats = data || [];
+
+      const { data: healthData } = await healthQuery;
+      healthStats = healthData || [];
   }
+
+  // Hent allOrgs for filteret i klienten
+  const { data: allOrgs } = await supabase.from('organizations').select('id, name, level, org_type').order('name');
 
   return (
       <OkonomiTabsClient 
@@ -168,13 +180,9 @@ export default async function OkonomiView({ filters, searchParams, user, isSuper
           unpaidParticipants={unpaidParticipants || []}
           healthStats={healthStats}
           orgType={orgType}
-          
-          // NYE PROPS SENDES HER:
           allOrgs={allOrgs || []}
           isSuperAdmin={isSuperAdmin}
           userRole={userRole}
-          childrenOrgs={childrenOrgs}
-          currentLevel={currentLevel}
       />
   )
 }
