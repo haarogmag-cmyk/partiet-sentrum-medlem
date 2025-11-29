@@ -7,8 +7,7 @@ import { Badge } from '@/components/ui/badge';
 export default async function Home() {
   const supabase = await createClient();
   
-  // 1. Hent fylkeslag
-  // Hvis du vil skjule Svalbard, legg til: .neq('name', 'Partiet Sentrum Svalbard')
+  // 1. Hent alle fylkeslag
   const { data: fylkeslag } = await supabase
     .from('organizations')
     .select('id, name')
@@ -16,7 +15,7 @@ export default async function Home() {
     .eq('org_type', 'ps') 
     .order('name');
 
-  // 2. Hent arrangementer
+  // 2. Hent kommende OFFENTLIGE arrangementer
   const { data: events } = await supabase
     .from('events')
     .select('*')
@@ -41,14 +40,20 @@ export default async function Home() {
                 
                 <div className="flex flex-wrap gap-4">
                     <Link href="/bli-medlem">
-                        {/* FIKS: Hvit knapp med Rød tekst. Hover: Rød knapp med Hvit tekst. */}
-                        <Button className="bg-white text-[#c93960] font-bold py-6 px-8 text-lg shadow-xl border-2 border-white hover:bg-[#c93960] hover:text-white hover:border-white transition-colors">
+                        {/* FIKS PS BLI MEDLEM: 
+                           Vanlig: Hvit bakgrunn, Sentrum-rød tekst, Sentrum-rød kant (synlig mot hvit bakgrunn, men her er bakgrunnen rød, så vi bruker hvit kant for å poppe)
+                           Endring etter ønske: Hvit bakgrunn, Rød tekst.
+                        */}
+                        <Button className="bg-white text-[#c93960] border-2 border-white font-bold py-6 px-8 text-lg shadow-xl hover:bg-[#c93960] hover:text-white hover:border-white transition-colors">
                             Bli medlem →
                         </Button>
                     </Link>
                     <Link href="/login">
-                        {/* Gjennomsiktig knapp med hvit kant */}
-                        <Button variant="outline" className="bg-transparent border-2 border-white text-white hover:bg-white hover:text-[#c93960] py-6 px-8 text-lg font-medium transition-colors">
+                        {/* FIKS PS LOGG INN:
+                           Vanlig: Transparent, Hvit kant, Hvit tekst.
+                           Hover: Hvit bakgrunn, Sentrum-rød kant (#c93960), Rød tekst.
+                        */}
+                        <Button variant="outline" className="bg-transparent border-2 border-white text-white py-6 px-8 text-lg font-medium hover:bg-white hover:text-[#c93960] hover:border-[#c93960] transition-colors">
                             Logg inn
                         </Button>
                     </Link>
@@ -66,13 +71,20 @@ export default async function Home() {
                 
                 <div className="flex flex-wrap gap-4 justify-end">
                     <Link href="/bli-medlem">
-                        {/* FIKS: Lys lilla knapp med mørk tekst. Hover: Hvit knapp med lilla tekst. */}
-                        <Button className="bg-[#E0CFFC] text-[#5e1639] font-bold py-6 px-8 text-lg shadow-xl border-2 border-[#E0CFFC] hover:bg-white hover:text-[#5e1639] hover:border-white transition-colors">
+                        {/* FIKS US BLI MEDLEM:
+                           Vanlig: Lys lilla bakgrunn (#E0CFFC), Mørk tekst (#5e1639).
+                           Hover: Hvit bakgrunn, Sentrum-rød tekst (#c93960), Sentrum-rød kant.
+                        */}
+                        <Button className="bg-[#E0CFFC] text-[#5e1639] border-2 border-[#E0CFFC] font-bold py-6 px-8 text-lg shadow-xl hover:bg-white hover:text-[#c93960] hover:border-[#c93960] transition-colors">
                             Bli US-medlem →
                         </Button>
                     </Link>
                     <Link href="/login">
-                        <Button variant="outline" className="bg-transparent border-2 border-[#E0CFFC] text-[#E0CFFC] hover:bg-[#E0CFFC] hover:text-[#5e1639] py-6 px-8 text-lg font-medium transition-colors">
+                        {/* FIKS US LOGG INN:
+                           Vanlig: Transparent, Hvit kant, Hvit tekst.
+                           Hover: Hvit bakgrunn, Hvit kant, Sentrum-rød tekst (#c93960).
+                        */}
+                        <Button variant="outline" className="bg-transparent border-2 border-white text-white py-6 px-8 text-lg font-medium hover:bg-white hover:text-[#c93960] hover:border-white transition-colors">
                             Logg inn
                         </Button>
                     </Link>
@@ -151,7 +163,6 @@ export default async function Home() {
             </div>
             <p className="text-slate-500 text-sm">Organisasjonsnummer: 925 317 819</p>
             
-            {/* FIKS: Nye knapper i footeren */}
             <div className="flex flex-wrap justify-center gap-4 font-medium pt-4">
                 <Link href="/login">
                     <div className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-ps-primary hover:border-ps-primary transition-colors shadow-sm text-sm font-bold cursor-pointer">
