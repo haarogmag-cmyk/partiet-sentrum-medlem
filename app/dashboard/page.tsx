@@ -30,14 +30,13 @@ export default async function Dashboard(props: {
   searchParams: SearchParams
 }) {
   const supabase = await createClient();
-  // Vi må 'awaite' searchParams i Next.js 15
   const searchParams = await props.searchParams;
   
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
   // --- 1. HENT ADMIN ROLLE & HIERARKI ---
-  const { data: adminRole, error: roleError } = await supabase
+  const { data: adminRole } = await supabase
     .from('admin_roles')
     .select(`
         role, 
@@ -51,9 +50,6 @@ export default async function Dashboard(props: {
     `)
     .eq('user_id', user.id)
     .single();
-
-  // Debugging (valgfritt)
-  if (roleError && roleError.code !== 'PGRST116') console.error("Role fetch error:", roleError);
 
   const roleData = adminRole as any;
   
@@ -139,7 +135,6 @@ export default async function Dashboard(props: {
         </div>
         
         <div className="flex gap-3">
-             {/* Import Button / Ny manuell */}
              {permissions.canEditMembers && (
                  <Link href="/bli-medlem">
                     <Button variant="secondary">+ Ny manuell</Button>
@@ -171,11 +166,7 @@ export default async function Dashboard(props: {
         {/* 2. ØKONOMI */}
         {currentTab === 'okonomi' && (
             permissions.canManageEconomy 
-              ? <OkonomiView 
-                  filters={dashboardFilters} 
-                  searchParams={searchParams} // <--- HER ER RETTELSEN
-                  user={user}                 // <--- HER ER RETTELSEN
-                />
+              ? <OkonomiView filters={dashboardFilters} searchParams={searchParams} user={user} />
               : <AccessDenied />
         )}
         
@@ -201,7 +192,7 @@ export default async function Dashboard(props: {
         {/* 6. INTERNT ARKIV */}
         {currentTab === 'arkiv' && (
              permissions.canViewArchive
-              ? <div className="bg-yellow-50 p-4 rounded-lg text-yellow-800 mb-4 border border-yellow-200 text-sm">🚧 Internt Arkiv-modul (Kommer snart / Implementer view her)</div>
+              ? <div className="bg-yellow-50 p-4 rounded-lg text-yellow-800 mb-4 border border-yellow-200 text-sm">🚧 Internt Arkiv-modul</div>
               : <AccessDenied />
         )}
 
@@ -250,6 +241,7 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
   const startRange = (currentPage - 1) * PAGE_SIZE; 
   const endRange = startRange + PAGE_SIZE - 1; 
 
+  // BYGG SPØRRING
   let queryBuilder = supabase.from('member_details_view').select('*', { count: 'exact' });
 
   if (searchQuery) {
@@ -271,13 +263,24 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
 
   const { data: pagedMembers, count: totalCount } = await queryBuilder.order('last_name', { ascending: true }).range(startRange, endRange);
 
+  // HENT ALLE ORGANISASJONER
   const { data: allOrgs } = await supabase.from('organizations').select('id, name, level, org_type').order('name');
+
   const fylkeslag = allOrgs?.filter((o:any) => o.level === 'county') || [];
   const lokallag = allOrgs?.filter((o:any) => o.level === 'local') || [];
 
   const memberList = pagedMembers || [];
   const totalItems = totalCount || 0;
   const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+
+  // --- NYTT: HENT TASKS FOR CRM ---
+  // Vi henter oppgaver tildelt adminens organisasjon (via RLS)
+  const { data: tasks } = await supabase
+    .from('tasks')
+    .select('*, member:members(phone, email)')
+    .eq('status', 'pending')
+    .order('due_date', { ascending: true })
+    .limit(5);
 
   const activeFilters = { ...filters, q: searchQuery, vol: volunteerFilter };
 
@@ -297,10 +300,8 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
             </div>
         </div>
 
-        {/* SEKSJON 2: CRM OPPGAVER */}
-        {/* Vi har fjernet CRM-kallet her fordi det nå gjøres internt i TasksWidget eller via en egen komponent, 
-            eller du kan legge det tilbake hvis du har TasksWidget klar og importert */}
-        <TasksWidget /> 
+        {/* SEKSJON 2: CRM OPPGAVER (Send med 'tasks' prop!) */}
+        {tasks && tasks.length > 0 && <TasksWidget tasks={tasks} />}
 
         {/* SEKSJON 3: MEDLEMSLISTE */}
         <div className="space-y-4">
