@@ -1,8 +1,10 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin' // Krever at du har laget denne utils-filen
+import { createAdminClient } from '@/utils/supabase/admin'
 import { revalidatePath } from 'next/cache'
+
+// --- ADMIN MANAGEMENT ---
 
 // TILDEL ADMIN ROLLE
 export async function assignAdminRole(formData: FormData) {
@@ -52,6 +54,8 @@ export async function removeAdminRole(roleId: string) {
     return { success: true }
 }
 
+// --- MEMBER MANAGEMENT ---
+
 // LEGG TIL MEDLEM MANUELT (Admin-funksjon)
 export async function addMemberManually(formData: FormData) {
   const supabase = await createClient()
@@ -60,11 +64,10 @@ export async function addMemberManually(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Unauthorized' }
   
-  // Her bør du ideelt sett sjekke admin_roles også
-  // ...
+  // Her bør du ideelt sett sjekke admin_roles også for sikkerhet
 
   const email = formData.get('email') as string
-  const password = 'Password123!' // Midlertidig passord, bruker bør bytte eller bruke magic link
+  const password = 'Password123!' // Midlertidig passord
 
   // 2. Bruk Admin API for å opprette bruker (Bypasser email confirmation hvis ønskelig)
   const supabaseAdmin = createAdminClient()
@@ -89,8 +92,41 @@ export async function addMemberManually(formData: FormData) {
       return { error: error.message }
   }
 
-  // Triggeren i databasen (handle_new_user) vil automatisk opprette raden i 'members'-tabellen
-  // og sette lokallag basert på postnummer.
+  revalidatePath('/dashboard')
+  return { success: true }
+}
+
+// OPPDATER MEDLEM (Redigerings-funksjon)
+export async function updateMember(formData: FormData) {
+  const supabase = await createClient()
+  
+  // Sjekk at bruker er logget inn
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const id = formData.get('id') as string
+  const first_name = formData.get('first_name') as string
+  const last_name = formData.get('last_name') as string
+  const email = formData.get('email') as string
+  const phone = formData.get('phone') as string
+
+  // Vi oppdaterer 'members'-tabellen direkte.
+  // Merk: Hvis e-post endres her, oppdateres den kun i medlemsregisteret, ikke login-e-posten i auth.users.
+  // For å endre login-e-post kreves auth.updateUser() som sender bekreftelse.
+  const { error } = await supabase
+    .from('members')
+    .update({ 
+        first_name, 
+        last_name, 
+        email, 
+        phone
+    })
+    .eq('id', id)
+
+  if (error) {
+      console.error("Update error:", error)
+      return { error: error.message }
+  }
 
   revalidatePath('/dashboard')
   return { success: true }
