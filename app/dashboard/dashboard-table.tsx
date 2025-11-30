@@ -1,9 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
 import ColumnSelector from './column-selector'
-import { ALL_COLUMNS } from './constants'
 import EditButton from './edit-button'
 import ExportButton from './export-button'
 import BulkEmailSender from './bulk-email'
@@ -85,14 +83,15 @@ export default function DashboardTable({ members, totalCount, filters, isSuperAd
          {/* HØYRE: Handlinger */}
          <div className="flex gap-2 items-center flex-wrap">
              
-             {/* 1. NY / IMPORT (Flyttet hit) */}
+             {/* 1. NY / IMPORT */}
              {canCreate && (
                  <>
-                    {/* Bruker Modal for opprettelse */}
+                    {/* HER ER KNAPPEN "+ Ny" */}
                     <AddMemberModal>
                         <Button variant="secondary" size="sm">+ Ny</Button>
                     </AddMemberModal>
                     
+                    {/* HER ER KNAPPEN "Import" */}
                     <CsvImportModal>
                         <Button variant="ghost" size="sm" className="text-slate-500 border border-dashed">Import</Button>
                     </CsvImportModal>
@@ -101,7 +100,7 @@ export default function DashboardTable({ members, totalCount, filters, isSuperAd
                  </>
              )}
 
-             {/* 2. ROLLE KNAPP (Alltid synlig, men grået ut) */}
+             {/* 2. ROLLE KNAPP */}
              {(isSuperAdmin || canManageRoles) && (
                  <Button 
                     variant="outline" 
@@ -163,13 +162,13 @@ export default function DashboardTable({ members, totalCount, filters, isSuperAd
                         <span className="inline-block px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-semibold text-slate-700 mb-1">
                             {m.lokallag_navn?.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '') || 'Ukjent'}
                         </span>
-                        <div className="text-[10px] text-slate-400 uppercase">{m.fylkeslag_navn?.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '')}</div>
+                        <div className="text-[10px] text-slate-400 uppercase">{m.fylkeslag_navn?.replace('Partiet Sentrum ', '')}</div>
                     </td>}
                     
                     {show('membership') && <td className="p-4">{m.membership_type?.youth ? <Badge variant="us">Unge Sentrum</Badge> : <Badge variant="neutral">Ordinær</Badge>}</td>}
                     
-                    {/* STATUS: Sjekker riktig kolonne basert på filteret */}
                     {show('status') && <td className="p-4">
+                        {/* Viser status for PS som standard, eller US hvis valgt i filter */}
                         {filters.org === 'us' ? (
                             <Badge variant={m.payment_status_us === 'active' ? 'success' : 'warning'}>{m.payment_status_us === 'active' ? 'BETALT' : 'VENTER'}</Badge>
                         ) : (
