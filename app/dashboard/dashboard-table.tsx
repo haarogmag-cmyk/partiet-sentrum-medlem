@@ -84,21 +84,20 @@ export default function DashboardTable({ members, totalCount, filters, isSuperAd
          <div className="flex gap-2 items-center flex-wrap">
              
              {/* 1. NY / IMPORT */}
-             {canCreate && (
+             {/* Vi fjerner sjekken midlertidig for å se om de dukker opp. Hvis de gjør det, er canCreate false. */}
+             {/* {canCreate && ( */} 
                  <>
-                    {/* HER ER KNAPPEN "+ Ny" */}
                     <AddMemberModal>
                         <Button variant="secondary" size="sm">+ Ny</Button>
                     </AddMemberModal>
                     
-                    {/* HER ER KNAPPEN "Import" */}
                     <CsvImportModal>
                         <Button variant="ghost" size="sm" className="text-slate-500 border border-dashed">Import</Button>
                     </CsvImportModal>
                     
                     <div className="h-6 w-px bg-slate-200 mx-1 hidden sm:block"></div>
                  </>
-             )}
+             {/* )} */}
 
              {/* 2. ROLLE KNAPP */}
              {(isSuperAdmin || canManageRoles) && (
@@ -168,7 +167,6 @@ export default function DashboardTable({ members, totalCount, filters, isSuperAd
                     {show('membership') && <td className="p-4">{m.membership_type?.youth ? <Badge variant="us">Unge Sentrum</Badge> : <Badge variant="neutral">Ordinær</Badge>}</td>}
                     
                     {show('status') && <td className="p-4">
-                        {/* Viser status for PS som standard, eller US hvis valgt i filter */}
                         {filters.org === 'us' ? (
                             <Badge variant={m.payment_status_us === 'active' ? 'success' : 'warning'}>{m.payment_status_us === 'active' ? 'BETALT' : 'VENTER'}</Badge>
                         ) : (
