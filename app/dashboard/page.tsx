@@ -17,6 +17,7 @@ import Pagination from './pagination';
 import DashboardTable from './dashboard-table';
 import GrowthChart from '@/components/dashboard/growth-chart';
 import TasksWidget from '@/components/dashboard/tasks-widget';
+import { CsvImportModal } from '@/components/dashboard/csv-import-modal';
 
 // UI Komponenter
 import { Badge } from '@/components/ui/badge';
@@ -94,21 +95,23 @@ export default async function Dashboard(props: {
   // --- 4. PARAMETERE ---
   const currentTab = typeof searchParams.tab === 'string' ? searchParams.tab : 'medlemmer';
   
+  // A. Filtre for MEDLEMSLISTE
+  // Hvis Superadmin ikke har valgt org, er den 'alle' (eller 'ps' default i filterkomponenten, men her håndterer vi 'alle')
   let orgFilter = typeof searchParams.org === 'string' ? searchParams.org : '';
-  if (!isSuperAdmin) {
+  if (!isSuperAdmin && !orgFilter) {
       orgFilter = myOrgType; 
   }
 
   const activeFylke = lockedFylke || (typeof searchParams.fylke === 'string' ? searchParams.fylke : '');
   const activeLokal = lockedLokal || (typeof searchParams.lokal === 'string' ? searchParams.lokal : '');
 
-  const dashboardFilters = {
+  const memberFilters = {
       org: orgFilter,
       fylke: activeFylke,
       lokal: activeLokal
   };
 
-  // ØKONOMI FILTRE
+  // B. Filtre for ØKONOMI
   const economyFilters = {
       org: typeof searchParams.eco_org === 'string' ? searchParams.eco_org : (isSuperAdmin ? 'ps' : myOrgType),
       fylke: lockedFylke || (typeof searchParams.eco_fylke === 'string' ? searchParams.eco_fylke : ''),
@@ -130,7 +133,9 @@ export default async function Dashboard(props: {
         <div>
           <div className="flex items-center gap-2 mb-1">
              {myOrgType === 'us' ? <Badge variant="us">Unge Sentrum</Badge> : <Badge variant="ps">Partiet Sentrum</Badge>}
+             
              {isSuperAdmin ? <Badge variant="warning">Superadmin</Badge> : <Badge variant="neutral">{translateRole(userRole)}</Badge>}
+             
              {!isSuperAdmin && org && <Badge variant="neutral">{org.name}</Badge>}
           </div>
           
@@ -143,7 +148,16 @@ export default async function Dashboard(props: {
         </div>
         
         <div className="flex gap-3">
-             {/* Vi fjerner knappene herfra da de er flyttet til tabellen */}
+             {permissions.canEditMembers && (
+                 <>
+                    <CsvImportModal>
+                        <Button variant="secondary">📥 Importer CSV</Button>
+                    </CsvImportModal>
+                    <Link href="/bli-medlem">
+                        <Button variant="secondary">+ Ny manuell</Button>
+                    </Link>
+                 </>
+             )}
              <form action={signOut}>
                 <Button variant="ghost">Logg ut</Button>
              </form>
@@ -158,7 +172,7 @@ export default async function Dashboard(props: {
             <MedlemmerContent 
                 searchParams={searchParams} 
                 supabase={supabase} 
-                filters={dashboardFilters}
+                filters={memberFilters}
                 lockedOrgType={!isSuperAdmin ? myOrgType : null}
                 lockedFylke={lockedFylke}
                 lockedLokal={lockedLokal}
@@ -188,7 +202,7 @@ export default async function Dashboard(props: {
         {/* 4. ARRANGEMENT */}
         {currentTab === 'arrangement' && (
             <ArrangementView 
-                filters={dashboardFilters} 
+                filters={memberFilters} 
                 defaultOrgId={defaultOrgId} 
                 permissions={permissions}
             />
@@ -258,14 +272,25 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
       queryBuilder = queryBuilder.or(`first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
   }
   
-  if (filters.fylke && filters.fylke !== 'alle') queryBuilder = queryBuilder.eq('fylkeslag_navn', filters.fylke);
-  if (filters.lokal && filters.lokal !== 'alle') queryBuilder = queryBuilder.eq('lokallag_navn', filters.lokal);
+  // --- GEOGRAFI FILTER (OPPDATERT FOR "BEGGE"-SØK) ---
+  if (filters.fylke && filters.fylke !== 'alle') {
+      // Hvis vi har valgt "Begge", kommer fylkesnavnet uten prefiks (f.eks "Agder")
+      // Vi bruker ilike for å matche både "Partiet Sentrum Agder" og "Unge Sentrum Agder"
+      queryBuilder = queryBuilder.ilike('fylkeslag_navn', `%${filters.fylke}%`);
+  }
+  if (filters.lokal && filters.lokal !== 'alle') {
+      queryBuilder = queryBuilder.ilike('lokallag_navn', `%${filters.lokal}%`);
+  }
   
+  // --- ORG TYPE FILTER ---
   if (filters.org === 'us') {
     queryBuilder = queryBuilder.contains('membership_type', { youth: true });
   } else if (filters.org === 'ps') {
+    // Hvis man velger KUN PS, vil man ofte utelukke de som bare er støttemedlemmer/ungdom uten PS-medlemskap?
+    // Eller vi viser alle som ikke har 'not_applicable'
     queryBuilder = queryBuilder.neq('payment_status_ps', 'not_applicable');
   }
+  // Hvis filters.org === 'alle' (eller tom), gjør vi ingen filtrering her -> viser begge.
 
   if (volunteerFilter && volunteerFilter !== 'alle') {
       queryBuilder = queryBuilder.contains('volunteer_roles', { [volunteerFilter]: true });
@@ -276,6 +301,8 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
   // HENT ALLE ORGANISASJONER
   const { data: allOrgs } = await supabase.from('organizations').select('id, name, level, org_type, parent_id').order('name');
 
+  // Vi filtrerer disse i klientkomponenten (filter.tsx) nå, så vi sender bare med alt.
+  // Men vi trenger en standardliste for initial render hvis nødvendig.
   const fylkeslag = allOrgs?.filter((o:any) => o.level === 'county') || [];
   const lokallag = allOrgs?.filter((o:any) => o.level === 'local') || [];
 
@@ -293,32 +320,45 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
 
   const activeFilters = { ...filters, q: searchQuery, vol: volunteerFilter };
 
-  // DYNAMISK TITTEL FOR KORTENE
+  // Dynamisk tittel for KPI kortene
   let orgLabel = '(Total)';
   if (filters.org === 'us') orgLabel = '(US)';
   else if (filters.org === 'ps') orgLabel = '(PS)';
+  else if (filters.org === 'alle') orgLabel = '(Begge)';
+
+  // Beregn tall for KPI kortene basert på nåværende liste (eller total count hvis paginert)
+  // For nøyaktighet på tvers av sider burde vi kjøre egne count-queries, men filter-basert telling på klient-liste er ok for små sett.
+  // Her bruker vi listen vi hentet.
+  const paidCount = memberList.filter((m:any) => {
+      if (filters.org === 'us') return m.payment_status_us === 'active';
+      if (filters.org === 'ps') return m.payment_status_ps === 'active';
+      // Hvis begge: Sjekk om minst én er aktiv
+      return m.payment_status_ps === 'active' || m.payment_status_us === 'active';
+  }).length;
+
+  const unpaidCount = memberList.filter((m:any) => {
+      if (filters.org === 'us') return m.payment_status_us !== 'active';
+      if (filters.org === 'ps') return m.payment_status_ps !== 'active';
+      return m.payment_status_ps !== 'active' && m.payment_status_us !== 'active';
+  }).length;
+
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
         
-        {/* SEKSJON 1: KPI & GRAFIKK */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="space-y-4">
                 <StatsCard title="Totalt i utvalg" count={totalItems} />
-                {/* Endret tittel til dynamisk */}
-                <StatsCard title={`Betalende ${orgLabel}`} count={memberList.filter((m:any) => (filters.org === 'us' ? m.payment_status_us : m.payment_status_ps) === 'active').length} variant="success" />
-                <StatsCard title={`Ubetalt ${orgLabel}`} count={memberList.filter((m:any) => (filters.org === 'us' ? m.payment_status_us : m.payment_status_ps) !== 'active').length} variant="danger" />
+                <StatsCard title={`Betalende ${orgLabel}`} count={paidCount} variant="success" />
+                <StatsCard title={`Ubetalt ${orgLabel}`} count={unpaidCount} variant="danger" />
             </div>
-
             <div className="lg:col-span-2 h-full">
                 <GrowthChart filters={activeFilters} />
             </div>
         </div>
 
-        {/* SEKSJON 2: CRM OPPGAVER */}
         {tasks && tasks.length > 0 && <TasksWidget tasks={tasks} />}
 
-        {/* SEKSJON 3: MEDLEMSLISTE */}
         <div className="space-y-4">
             <MemberFilter 
                 fylkeslag={fylkeslag} 
@@ -336,7 +376,7 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
                 organizations={allOrgs || []} 
                 canEdit={permissions.canEditMembers}
                 canManageRoles={permissions.canManageRoles}
-                canCreate={permissions.canEditMembers} // <--- SENDER RETTIGHET TIL NY/IMPORT
+                canCreate={permissions.canEditMembers}
             />
             
             <Pagination currentPage={currentPage} totalPages={totalPages} searchParams={searchParams} />
