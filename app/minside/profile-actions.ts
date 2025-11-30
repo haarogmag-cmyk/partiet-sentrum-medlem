@@ -26,24 +26,31 @@ export async function updateProfile(formData: FormData) {
       updated_at: new Date().toISOString()
   }
 
-  // Kun oppdater postnummer hvis det faktisk er sendt med og er gyldig
   if (zip && zip.length === 4) {
       updates.postal_code = zip;
   }
-
-  console.log("Forsøker å oppdatere bruker:", user.id);
-  console.log("Data som sendes:", updates);
 
   // 4. Oppdater databasen
   const { error } = await supabase
     .from('members')
     .update(updates)
-    .eq('id', user.id) // Oppdaterer KUN min rad
+    .eq('id', user.id)
 
   if (error) {
-      // VIKTIG: Denne loggen vil vises i terminalen din i VS Code (eller Vercel logs)
-      console.error('❌ DATABASE FEIL VED OPPDATERING:', error)
-      return { error: `Lagring feilet: ${error.message} (Kode: ${error.code})` }
+      console.error('Update error:', error)
+
+      // HÅNDTER DUPLIKATER (Kode 23505)
+      if (error.code === '23505') {
+          if (error.message.includes('phone')) {
+              return { error: 'Dette mobilnummeret er allerede registrert på et annet medlem.' }
+          }
+          if (error.message.includes('email')) {
+              return { error: 'Denne e-postadressen er allerede i bruk.' }
+          }
+          return { error: 'Denne informasjonen er allerede i bruk av en annen bruker.' }
+      }
+
+      return { error: 'Kunne ikke lagre endringene. Prøv igjen senere.' }
   }
 
   revalidatePath('/minside')
