@@ -30,34 +30,34 @@ export default async function MinSidePage() {
 
   const isYouth = member.membership_type?.youth;
 
-  // 3. HENT ORGANISASJONS-IDer
-  // A. Partiet Sentrum (PS)
-  const { data: psFylke } = await supabase.from('organizations').select('id, name').eq('name', `Partiet Sentrum ${member.fylke_navn_raw}`).eq('level', 'county').maybeSingle();
-  const { data: psLokal } = await supabase.from('organizations').select('id, name').eq('name', `Partiet Sentrum ${member.kommune_navn_raw}`).eq('level', 'local').maybeSingle();
+  // 3. HENT ORGANISASJONS-IDer (MED FIKS FOR STORE BOKSTAVER)
+  // Vi bruker .ilike() for å være sikker på at TØNSBERG matcher Tønsberg
+  
+  // A. Partiet Sentrum
+  const { data: psFylke } = await supabase.from('organizations').select('id, name').ilike('name', `Partiet Sentrum ${member.fylke_navn_raw}`).eq('level', 'county').maybeSingle();
+  const { data: psLokal } = await supabase.from('organizations').select('id, name').ilike('name', `Partiet Sentrum ${member.kommune_navn_raw}`).eq('level', 'local').maybeSingle();
 
-  // B. Unge Sentrum (Kun hvis ungdom)
+  // B. Unge Sentrum
   let usFylke = null;
   let usLokal = null;
   if (isYouth) {
-      const { data: uf } = await supabase.from('organizations').select('name, id').eq('name', `Unge Sentrum ${member.fylke_navn_raw}`).eq('level', 'county').maybeSingle();
-      const { data: ul } = await supabase.from('organizations').select('name, id').eq('name', `Unge Sentrum ${member.kommune_navn_raw}`).eq('level', 'local').maybeSingle();
+      const { data: uf } = await supabase.from('organizations').select('name, id').ilike('name', `Unge Sentrum ${member.fylke_navn_raw}`).eq('level', 'county').maybeSingle();
+      const { data: ul } = await supabase.from('organizations').select('name, id').ilike('name', `Unge Sentrum ${member.kommune_navn_raw}`).eq('level', 'local').maybeSingle();
       usFylke = uf;
       usLokal = ul;
   }
 
-  // 4. HENT EVENTS (Kun publiserte)
+  // 4. HENT EVENTS
   const { data: allEvents } = await supabase
     .from('events')
     .select('*')
     .eq('is_published', true)
     .order('start_time', { ascending: false });
 
-  // Sorter events i bøtter
   const localEvents = allEvents?.filter((e: any) => [psLokal?.id, usLokal?.id].includes(e.organization_id)) || [];
   const countyEvents = allEvents?.filter((e: any) => [psFylke?.id, usFylke?.id].includes(e.organization_id)) || [];
   const nationalEvents = allEvents?.filter((e: any) => !e.organization_id) || [];
 
-  // Sjekk om brukeren er Admin
   const { data: adminRoles } = await supabase.from('admin_roles').select('role').eq('user_id', user.id);
   const isAdmin = adminRoles && adminRoles.length > 0;
 
@@ -70,7 +70,7 @@ export default async function MinSidePage() {
 
   return (
     <div className="min-h-screen p-4 md:p-8 font-sans bg-background flex flex-col items-center">
-      <div className="w-full max-w-7xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="w-full max-w-6xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
         
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-ps-primary/10 pb-6">
@@ -88,7 +88,7 @@ export default async function MinSidePage() {
           </div>
         </div>
 
-        {/* GRID LAYOUT: 1/3 Venstre, 2/3 Høyre */}
+        {/* GRID LAYOUT */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
             
             {/* --- VENSTRE KOLONNE: KORT & PROFIL --- */}
@@ -98,7 +98,6 @@ export default async function MinSidePage() {
                 <section className="space-y-4">
                     <h3 className="text-xs font-bold uppercase text-ps-text/40 tracking-wider">Dine Medlemskap</h3>
                     <div className="flex flex-col gap-4">
-                        {/* PS KORT */}
                         <MembershipCard 
                             orgName="Partiet Sentrum" 
                             name={`${member.first_name} ${member.last_name}`} 
@@ -107,7 +106,6 @@ export default async function MinSidePage() {
                             variant="ps"
                             downloadBtn={<DownloadCertificateButton member={member} orgName="Partiet Sentrum" />}
                         />
-                        {/* US KORT */}
                         {isYouth && (
                             <MembershipCard 
                                 orgName="Unge Sentrum" 
@@ -128,27 +126,25 @@ export default async function MinSidePage() {
                         <EditProfileModal member={member} />
                     </div>
                     <CardContent className="p-0 text-sm">
-                        {/* Personalia */}
                         <InfoRow label="Navn" value={`${member.first_name} ${member.last_name}`} />
                         <InfoRow label="E-post" value={member.email} />
                         <InfoRow label="Telefon" value={member.phone} />
                         <InfoRow label="Adresse" value={`${member.postal_code} ${member.city}`} />
                         
-                        {/* Partiet Sentrum Tilhørighet */}
                         <div className="bg-ps-primary/5 p-2 font-bold text-xs uppercase text-ps-text/50 pl-4 mt-2 border-y border-ps-primary/5">
                             Partiet Sentrum
                         </div>
-                        <InfoRow label="Lokallag" value={psLokal?.name || 'Ikke funnet'} />
-                        <InfoRow label="Fylkeslag" value={psFylke?.name || 'Ikke funnet'} />
+                        {/* Nå bruker vi variablene som er hentet med .ilike() */}
+                        <InfoRow label="Lokallag" value={psLokal?.name?.replace('Partiet Sentrum ', '') || 'Ikke funnet'} />
+                        <InfoRow label="Fylkeslag" value={psFylke?.name?.replace('Partiet Sentrum ', '') || 'Ikke funnet'} />
 
-                        {/* Unge Sentrum Tilhørighet (Kun hvis ungdom) */}
                         {isYouth && (
                             <>
                                 <div className="bg-us-primary/10 p-2 font-bold text-xs uppercase text-us-primary pl-4 mt-2 border-y border-us-primary/10">
                                     Unge Sentrum
                                 </div>
-                                <InfoRow label="Lokallag" value={usLokal?.name || 'Ikke funnet'} />
-                                <InfoRow label="Fylkeslag" value={usFylke?.name || 'Ikke funnet'} />
+                                <InfoRow label="Lokallag" value={usLokal?.name?.replace('Unge Sentrum ', '') || 'Ikke funnet'} />
+                                <InfoRow label="Fylkeslag" value={usFylke?.name?.replace('Unge Sentrum ', '') || 'Ikke funnet'} />
                             </>
                         )}
                     </CardContent>
@@ -170,7 +166,6 @@ export default async function MinSidePage() {
                     </div>
 
                     <div className="space-y-8">
-                         {/* Lokalt */}
                          <EventSection title="Lokalt" events={localEvents} emptyText={`Ingen møter planlagt lokalt ennå.`} />
                          
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -192,7 +187,7 @@ export default async function MinSidePage() {
                         <VolunteerCard currentRoles={member.volunteer_roles} />
                     </div>
 
-                    {/* GDPR / Data */}
+                    {/* GDPR */}
                     <div>
                         <div className="flex items-center gap-2 mb-4">
                             <span className="text-xl">🔐</span>
@@ -210,7 +205,19 @@ export default async function MinSidePage() {
   );
 }
 
-// --- KOMPONENTER ---
+// ... (Behold MembershipCard, EventSection, EventCard, InfoRow som før) ...
+// Pass på at InfoRow har den oppdaterte CSSen for å ikke kutte tekst (whitespace-normal)
+function InfoRow({ label, value }: { label: string, value: string }) {
+  return (
+    <div className="flex justify-between items-start py-3 px-4 border-b border-slate-50 last:border-0 hover:bg-ps-primary/5 transition-colors">
+      <span className="text-slate-500 whitespace-nowrap pr-4">{label}</span>
+      <span className="font-medium text-ps-text text-right">{value || '-'}</span>
+    </div>
+  )
+}
+
+// ... (Husk å inkludere resten av hjelpekomponentene fra forrige filversjon hvis du overskriver alt)
+// Jeg legger dem til her for sikkerhets skyld:
 
 function MembershipCard({ orgName, name, id, status, variant, downloadBtn }: any) {
     const isPaid = status === 'active';
@@ -246,6 +253,32 @@ function MembershipCard({ orgName, name, id, status, variant, downloadBtn }: any
     )
 }
 
+function EventCard({ ev }: { ev: any }) {
+    return (
+        <Link href={`/minside/event/${ev.id}`} className="block h-full">
+            <Card className="h-full hover:shadow-md transition-all hover:-translate-y-1 border-l-4 border-l-ps-primary bg-white">
+                <CardContent className="p-4 flex flex-col justify-between h-full">
+                    <div>
+                        <div className="flex justify-between items-start mb-2">
+                            <span className="text-xs font-bold text-ps-primary bg-ps-primary/5 px-2 py-1 rounded">
+                                {new Date(ev.start_time).toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })}
+                            </span>
+                            {ev.is_digital && <Badge variant="us">Digitalt</Badge>}
+                        </div>
+                        <h4 className="font-bold text-ps-text text-lg leading-tight">{ev.title}</h4>
+                        <div className="mt-2 text-xs text-slate-500 flex items-center gap-1">
+                            <span>📍</span> {ev.location || 'Nett'}
+                        </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-slate-50 flex justify-end">
+                        <span className="text-xs font-bold text-ps-primary">Gå til →</span>
+                    </div>
+                </CardContent>
+            </Card>
+        </Link>
+    )
+}
+
 function EventSection({ title, events, emptyText }: any) {
     if (!events || events.length === 0) {
         return (
@@ -258,35 +291,9 @@ function EventSection({ title, events, emptyText }: any) {
     return (
         <div className="space-y-3">
             <h3 className="text-xs font-bold uppercase text-ps-primary ml-1 opacity-80">{title}</h3>
-            {events.map((ev: any) => (
-                <Card key={ev.id} className="hover:shadow-md transition-all border-l-4 border-l-ps-primary">
-                    <CardContent className="flex justify-between items-center p-4">
-                        <div>
-                            <div className="font-bold text-ps-text text-lg">{ev.title}</div>
-                            <div className="text-sm text-ps-text/60 flex items-center gap-2 mt-1">
-                                <span>📅 {new Date(ev.start_time).toLocaleDateString('no-NO')}</span>
-                                <span>📍 {ev.location || 'Digitalt'}</span>
-                            </div>
-                        </div>
-                        <Link href={`/minside/event/${ev.id}`}>
-                            <Button variant="secondary" className="text-xs">
-                                Åpne →
-                            </Button>
-                        </Link>
-                    </CardContent>
-                </Card>
-            ))}
+            <div className="grid grid-cols-1 gap-3"> 
+                {events.map((ev: any) => <EventCard key={ev.id} ev={ev} />)}
+            </div>
         </div>
     )
-}
-
-// Oppdatert InfoRow for å hindre tekstkutting
-function InfoRow({ label, value }: { label: string, value: string }) {
-  return (
-    <div className="flex justify-between items-start py-3 px-4 border-b border-slate-50 last:border-0 hover:bg-ps-primary/5 transition-colors">
-      <span className="text-slate-500 whitespace-nowrap pr-4">{label}</span>
-      {/* Her tillater vi tekstbryting og fjerner truncation */}
-      <span className="font-medium text-ps-text text-right">{value || '-'}</span>
-    </div>
-  )
 }
