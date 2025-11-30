@@ -17,6 +17,7 @@ import Pagination from './pagination';
 import DashboardTable from './dashboard-table';
 import GrowthChart from '@/components/dashboard/growth-chart';
 import TasksWidget from '@/components/dashboard/tasks-widget';
+import { CsvImportModal } from '@/components/dashboard/csv-import-modal';
 
 // UI Komponenter
 import { Badge } from '@/components/ui/badge';
@@ -94,7 +95,6 @@ export default async function Dashboard(props: {
   // --- 4. PARAMETERE ---
   const currentTab = typeof searchParams.tab === 'string' ? searchParams.tab : 'medlemmer';
   
-  // A. Filtre for MEDLEMSLISTE
   let orgFilter = typeof searchParams.org === 'string' ? searchParams.org : '';
   if (!isSuperAdmin) {
       orgFilter = myOrgType; 
@@ -109,7 +109,7 @@ export default async function Dashboard(props: {
       lokal: activeLokal
   };
 
-  // B. Filtre for ØKONOMI
+  // ØKONOMI FILTRE
   const economyFilters = {
       org: typeof searchParams.eco_org === 'string' ? searchParams.eco_org : (isSuperAdmin ? 'ps' : myOrgType),
       fylke: lockedFylke || (typeof searchParams.eco_fylke === 'string' ? searchParams.eco_fylke : ''),
@@ -206,9 +206,9 @@ export default async function Dashboard(props: {
               : <AccessDenied />
         )}
 
-        {/* 7. INNSTILLINGER */}
+        {/* 7. INNSTILLINGER (KUN SUPERADMIN) */}
         {currentTab === 'innstillinger' && (
-            (isSuperAdmin || permissions.canManageRoles) 
+            isSuperAdmin // <--- ENDRET: Kun Superadmin slipper inn her
               ? <SettingsView />
               : <AccessDenied />
         )}
@@ -216,7 +216,7 @@ export default async function Dashboard(props: {
         {/* Feilhåndtering */}
         {['okonomi', 'innstillinger', 'ressurser', 'arrangement', 'arkiv'].includes(currentTab) && 
          ((currentTab === 'okonomi' && !permissions.canManageEconomy) || 
-         (currentTab === 'innstillinger' && !isSuperAdmin && !permissions.canManageRoles) ||
+         (currentTab === 'innstillinger' && !isSuperAdmin) || // <--- ENDRET: Strengere sjekk
          (currentTab === 'ressurser' && !permissions.canManageEvents) ||
          (currentTab === 'arrangement' && !permissions.canManageEvents) ||
          (currentTab === 'arkiv' && !permissions.canViewArchive)) && (
@@ -227,7 +227,7 @@ export default async function Dashboard(props: {
   );
 }
 
-// --- HJELPEKOMPONENTER ---
+// ... (Resten av hjelpekomponentene som før) ...
 
 function AccessDenied() {
     return (
@@ -243,22 +243,23 @@ function translateRole(role: string) {
     return map[role] || role;
 }
 
-// --- MEDLEM VIEW (Hovedlisten) ---
 async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType, lockedFylke, lockedLokal, isSuperAdmin, permissions }: any) {
+  // ... (Ingen endringer her, behold koden som den var i forrige svar) ...
+  // For å spare plass: Lim inn innholdet fra MedlemmerContent i forrige svar her.
+  // Det inkluderer koden for å hente tasks, allOrgs, members, etc.
+  
   const searchQuery = typeof searchParams.q === 'string' ? searchParams.q : '';
   const volunteerFilter = typeof searchParams.vol === 'string' ? searchParams.vol : '';
   const currentPage = typeof searchParams.page === 'string' ? parseInt(searchParams.page) : 1;
   const startRange = (currentPage - 1) * PAGE_SIZE; 
   const endRange = startRange + PAGE_SIZE - 1; 
 
-  // BYGG SPØRRING
   let queryBuilder = supabase.from('member_details_view').select('*', { count: 'exact' });
 
   if (searchQuery) {
       queryBuilder = queryBuilder.or(`first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
   }
   
-  // --- GEOGRAFI FILTER (ROBUST) ---
   if (filters.fylke && filters.fylke !== 'alle') {
       const cleanFylke = filters.fylke.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
       queryBuilder = queryBuilder.ilike('fylkeslag_navn', `%${cleanFylke}%`);
@@ -268,7 +269,6 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
       queryBuilder = queryBuilder.ilike('lokallag_navn', `%${cleanLokal}%`);
   }
   
-  // --- ORG TYPE FILTER ---
   if (filters.org === 'us') {
     queryBuilder = queryBuilder.contains('membership_type', { youth: true });
   } else if (filters.org === 'ps') {
@@ -281,7 +281,6 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
 
   const { data: pagedMembers, count: totalCount } = await queryBuilder.order('last_name', { ascending: true }).range(startRange, endRange);
 
-  // HENT ALLE ORGANISASJONER
   const { data: allOrgs } = await supabase.from('organizations').select('id, name, level, org_type, parent_id').order('name');
 
   const fylkeslag = allOrgs?.filter((o:any) => o.level === 'county') || [];
@@ -291,7 +290,6 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
   const totalItems = totalCount || 0;
   const totalPages = Math.ceil(totalItems / PAGE_SIZE);
 
-  // Hent tasks for CRM
   const { data: tasks } = await supabase
     .from('tasks')
     .select('*, member:members(phone, email)')
@@ -301,13 +299,11 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
 
   const activeFilters = { ...filters, q: searchQuery, vol: volunteerFilter };
 
-  // Dynamisk tittel for KPI kortene
   let orgLabel = '(Total)';
   if (filters.org === 'us') orgLabel = '(US)';
   else if (filters.org === 'ps') orgLabel = '(PS)';
   else if (filters.org === 'alle') orgLabel = '(Begge)';
 
-  // Beregn tall for KPI kortene
   const paidCount = memberList.filter((m:any) => {
       if (filters.org === 'us') return m.payment_status_us === 'active';
       if (filters.org === 'ps') return m.payment_status_ps === 'active';
@@ -322,7 +318,6 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
-        
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="space-y-4">
                 <StatsCard title="Totalt i utvalg" count={totalItems} />
@@ -333,9 +328,7 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
                 <GrowthChart filters={activeFilters} />
             </div>
         </div>
-
         {tasks && tasks.length > 0 && <TasksWidget tasks={tasks} />}
-
         <div className="space-y-4">
             <MemberFilter 
                 fylkeslag={fylkeslag} 
@@ -344,7 +337,6 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
                 lockedFylke={lockedFylke}
                 lockedLokal={lockedLokal}
             />
-
             <DashboardTable 
                 members={memberList} 
                 totalCount={totalItems}
@@ -353,9 +345,8 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
                 organizations={allOrgs || []} 
                 canEdit={permissions.canEditMembers}
                 canManageRoles={permissions.canManageRoles}
-                canCreate={permissions.canEditMembers} // <--- VIKTIG: SENDER RETTIGHETEN HER!
+                canCreate={permissions.canEditMembers}
             />
-            
             <Pagination currentPage={currentPage} totalPages={totalPages} searchParams={searchParams} />
         </div>
     </div>
