@@ -4,12 +4,12 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
 
-// --- 1. REGISTRERING (BLI MEDLEM) ---
+// --- 1. REGISTRERING (BLI MEDLEM - OFFENTLIG) ---
 export async function signup(formData: FormData) {
   const supabase = await createClient()
 
   const email = formData.get('email') as string
-  const password = formData.get('password') as string
+  const password = formData.get('password') as string // Henter passordet brukeren skrev
   
   // Hent personalia
   const firstName = formData.get('firstName') as string
@@ -17,7 +17,21 @@ export async function signup(formData: FormData) {
   const phone = formData.get('phone') as string
   const zip = formData.get('zip') as string
   const birthDate = formData.get('birthDate') as string
-  const membershipSelection = formData.get('membershipSelection') as string
+  
+  // Medlemskapsvalg kommer som en JSON-streng fra skjemaet
+  const membershipSelectionRaw = formData.get('membershipSelection') as string
+  let membershipSelection = {}
+  
+  try {
+    membershipSelection = JSON.parse(membershipSelectionRaw || '{}')
+  } catch (e) {
+    console.error("Feil ved parsing av membershipSelection", e)
+  }
+
+  // Enkel validering
+  if (!email || !password || password.length < 6) {
+      return redirect('/bli-medlem?error=Passord må være minst 6 tegn')
+  }
 
   const { error } = await supabase.auth.signUp({
     email,
@@ -39,7 +53,8 @@ export async function signup(formData: FormData) {
     return redirect('/bli-medlem?error=' + error.message)
   }
 
-  redirect('/takk?message=Velkommen')
+  // Suksess! Send til takk-siden
+  redirect('/takk?message=Velkommen! Du kan nå logge inn.')
 }
 
 // --- 2. INNLOGGING MED PASSORD ---
@@ -61,7 +76,7 @@ export async function loginWithPassword(formData: FormData) {
   redirect('/dashboard')
 }
 
-// Beholder denne 'login' funksjonen som et alias for bakoverkompatibilitet
+// Alias for 'login' hvis noen komponenter fortsatt bruker det gamle navnet
 export async function login(formData: FormData) {
     return loginWithPassword(formData)
 }
@@ -70,6 +85,8 @@ export async function login(formData: FormData) {
 export async function loginWithMagicLink(formData: FormData) {
   const supabase = await createClient()
   const email = formData.get('email') as string
+  
+  // Hent URL dynamisk for å støtte både localhost og Vercel
   const origin = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
 
   const { error } = await supabase.auth.signInWithOtp({
@@ -86,7 +103,7 @@ export async function loginWithMagicLink(formData: FormData) {
   redirect('/login?message=Sjekk e-posten din for innloggingslenke!')
 }
 
-// Alias for Glemt Passord siden
+// Alias for Glemt Passord-siden hvis den bruker dette navnet
 export async function sendMagicLink(formData: FormData) {
    return loginWithMagicLink(formData)
 }
