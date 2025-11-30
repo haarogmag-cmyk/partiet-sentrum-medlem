@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState, useEffect } from 'react'
+import { SearchableSelect } from '@/components/ui/searchable-select' // <--- BRUKER SØKBAR SELECT
 
 interface Props {
     allOrgs: any[]
@@ -19,6 +20,7 @@ export default function EconomyFilter({ allOrgs, isSuperAdmin, activeTab }: Prop
   const [selectedFylke, setSelectedFylke] = useState(searchParams.get('eco_fylke') || '')
   const [selectedLokal, setSelectedLokal] = useState(searchParams.get('eco_lokal') || '')
 
+  // Synkroniser med URL
   useEffect(() => {
       setOrgType(searchParams.get('eco_org') || 'ps')
       setSelectedFylke(searchParams.get('eco_fylke') || '')
@@ -27,21 +29,25 @@ export default function EconomyFilter({ allOrgs, isSuperAdmin, activeTab }: Prop
 
   if (!isSuperAdmin || activeTab === 'helse') return null;
 
+  // Finn fylkeslagene (nivå 1)
   const fylkeslag = allOrgs.filter(o => o.level === 'county' && o.org_type === orgType)
   
-  // --- FORBEDRET LOGIKK ---
+  // Finn lokallagene (nivå 2) - ROBUST LOGIKK
   let lokallag: any[] = []
   
   if (selectedFylke) {
+      // 1. Prøv å finne fylkes-objektet for å få ID-en (Best metode)
       const fylkeObj = fylkeslag.find(f => f.name === selectedFylke)
       
       if (fylkeObj) {
-          // 1. Prøv å finne barn via parent_id
+          // Metode A: Match på parent_id
           lokallag = allOrgs.filter(o => o.parent_id === fylkeObj.id)
           
-          // 2. Hvis tomt (dataleakkasje?), prøv å finne via navn (hvis navnet inneholder fylkesnavnet, sjeldent)
-          // ELLER: Hvis parent_id er null i datasettet, kan vi ikke gjøre så mye.
-          // Men vi vet at parent_id er satt i DB.
+          // Metode B: Fallback på navn hvis parent_id mangler (Sikkerhetsnett)
+          if (lokallag.length === 0) {
+             const shortName = selectedFylke.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
+             lokallag = allOrgs.filter(o => o.level === 'local' && o.org_type === orgType && o.name.includes(shortName));
+          }
       }
   }
 
@@ -53,17 +59,27 @@ export default function EconomyFilter({ allOrgs, isSuperAdmin, activeTab }: Prop
       router.replace(`/dashboard?${params.toString()}`)
   }
 
-    // DEBUGGING:
-    console.log("--- FILTER DEBUG ---")
-    console.log("Selected Fylke:", selectedFylke)
-    console.log("Fylkesobjekt funnet:", fylkeslag.find(f => f.name === selectedFylke))
-    console.log("Antall lokallag funnet:", lokallag.length)
-    if (lokallag.length === 0 && selectedFylke) {
-        console.log("Eksempel på org i allOrgs:", allOrgs[0]) // Sjekk om parent_id er med
-  }
+  // --- KONVERTER TIL OPTIONS FOR SearchableSelect ---
+  const fylkeOptions = [
+      { value: '', label: 'Hele landet (Nasjonalt)' },
+      ...fylkeslag.map((f: any) => ({ 
+          value: f.name, 
+          label: f.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '') 
+      }))
+  ]
+
+  const lokalOptions = [
+      { value: '', label: 'Alle lokallag (Vis fylkestall)' },
+      ...lokallag.map((l: any) => ({ 
+          value: l.name, 
+          label: l.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '') 
+      }))
+  ]
 
   return (
     <div className="bg-white p-4 rounded-xl border border-ps-primary/10 shadow-sm mb-6 flex flex-wrap gap-4 items-center">
+        
+        {/* ORG VELGER */}
         <div className="flex items-center gap-2">
             <span className="text-xs font-bold uppercase text-slate-500">Visning:</span>
             <div className="flex bg-slate-100 rounded-lg p-1">
@@ -72,38 +88,34 @@ export default function EconomyFilter({ allOrgs, isSuperAdmin, activeTab }: Prop
             </div>
         </div>
 
+        {/* DRILL DOWN MENYER (Kun hvis ikke oversikt) */}
         {activeTab !== 'oversikt' && (
             <>
                 <div className="h-6 w-px bg-slate-200 mx-2 hidden md:block"></div>
                 
-                <select 
-                    value={selectedFylke} 
-                    onChange={(e) => { updateUrl(orgType, e.target.value, '') }} 
-                    className="bg-slate-50 border border-slate-200 text-sm rounded-lg p-2 outline-none focus:ring-2 focus:ring-ps-primary/20 cursor-pointer hover:bg-white"
-                >
-                    <option value="">Hele landet (Nasjonalt)</option>
-                    {fylkeslag.map(f => <option key={f.id} value={f.name}>{f.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '')}</option>)}
-                </select>
+                {/* FYLKE SEARCHABLE */}
+                <div className="w-64">
+                    <SearchableSelect 
+                        options={fylkeOptions}
+                        value={selectedFylke}
+                        onChange={(val) => updateUrl(orgType, val, '')}
+                        placeholder="Søk fylke..."
+                    />
+                </div>
 
+                {/* LOKALLAG SEARCHABLE */}
                 {selectedFylke && (
                     <>
                         <span className="text-slate-300">→</span>
-                        <select 
-                            value={selectedLokal} 
-                            onChange={(e) => { updateUrl(orgType, selectedFylke, e.target.value) }} 
-                            className="bg-slate-50 border border-slate-200 text-sm rounded-lg p-2 outline-none focus:ring-2 focus:ring-ps-primary/20 cursor-pointer hover:bg-white"
-                            // ENDRING: Vi fjerner 'disabled' hvis listen er tom, men viser en tekst i stedet
-                            // disabled={lokallag.length === 0} 
-                        >
-                            <option value="">Velg lokallag...</option>
-                            {lokallag.length > 0 ? (
-                                lokallag.map(l => (
-                                    <option key={l.id} value={l.name}>{l.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '')}</option>
-                                ))
-                            ) : (
-                                <option disabled>Ingen lokallag funnet (Sjekk DB kobling)</option>
-                            )}
-                        </select>
+                        <div className="w-64">
+                            <SearchableSelect 
+                                options={lokalOptions}
+                                value={selectedLokal}
+                                onChange={(val) => updateUrl(orgType, selectedFylke, val)}
+                                placeholder="Søk lokallag..."
+                                disabled={lokallag.length === 0}
+                            />
+                        </div>
                     </>
                 )}
             </>

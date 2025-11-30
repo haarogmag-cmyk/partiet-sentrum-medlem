@@ -5,6 +5,7 @@ import { sendBulkEmail } from '../email-actions'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import { SearchableSelect } from '@/components/ui/searchable-select' // <--- NY IMPORT
 
 interface Props {
     fylkeslag: any[]
@@ -17,7 +18,6 @@ interface Props {
 export default function NewMessageForm({ fylkeslag, lokallag, isSuperAdmin, myOrg, myOrgType }: Props) {
   const [loading, setLoading] = useState(false)
   
-  // Initialiser filter
   const [filter, setFilter] = useState({ 
       fylke: isSuperAdmin ? 'alle' : (myOrg?.level === 'county' || myOrg?.level === 'local' ? myOrg.name : 'alle'),
       lokal: isSuperAdmin ? 'alle' : (myOrg?.level === 'local' ? myOrg.name : 'alle'),
@@ -26,7 +26,6 @@ export default function NewMessageForm({ fylkeslag, lokallag, isSuperAdmin, myOr
   
   const [content, setContent] = useState({ subject: '', message: '' })
 
-  // Reset hvis props endres (sikkerhetsnett)
   useEffect(() => {
       if (!isSuperAdmin) {
           setFilter(prev => ({
@@ -38,60 +37,50 @@ export default function NewMessageForm({ fylkeslag, lokallag, isSuperAdmin, myOr
       }
   }, [isSuperAdmin, myOrg, myOrgType])
 
+  const showOrgDropdown = isSuperAdmin;
+  const canSelectFylke = isSuperAdmin || myOrg?.level === 'national';
+  const canSelectLokal = isSuperAdmin || myOrg?.level === 'national' || myOrg?.level === 'county';
 
-  // --- SMARTERE FILTRERING AV DROPDOWNS ---
-
-  // 1. Filtrer FYLKER
+  // --- FILTRERING AV LISTER ---
+  
   const filteredFylker = useMemo(() => {
-      // Hvis "Begge" er valgt, slå sammen duplikater (vis kun unike navn uten prefix)
       if (filter.org === 'alle') {
           const uniqueNames = new Set();
           const uniqueList: any[] = [];
-          
           fylkeslag.forEach(f => {
               const shortName = f.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
               if (!uniqueNames.has(shortName)) {
                   uniqueNames.add(shortName);
-                  // Vi lager et "virtuelt" objekt med rent navn
-                  uniqueList.push({ id: shortName, name: shortName, isVirtual: true });
+                  uniqueList.push({ id: f.id, name: f.name, shortName: shortName, isVirtual: true });
               }
           });
-          return uniqueList.sort((a, b) => a.name.localeCompare(b.name));
+          return uniqueList.sort((a, b) => a.shortName.localeCompare(b.shortName));
       }
-      
-      // Ellers vis kun de som tilhører valgt org
-      return fylkeslag.filter(f => f.org_type === filter.org);
+      return fylkeslag.filter(f => f.org_type === filter.org).map(f => ({...f, shortName: f.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '')}));
   }, [fylkeslag, filter.org]);
 
-
-  // 2. Filtrer LOKALLAG
   const filteredLokallag = useMemo(() => {
       let list = lokallag;
-
-      // Filtrer på org type (hvis ikke alle)
+      
       if (filter.org !== 'alle') list = list.filter(l => l.org_type === filter.org);
 
-      // Filtrer på FYLKE
-      if (filter.fylke !== 'alle') {
-          const isVirtualFylke = !filter.fylke.includes('Partiet Sentrum') && !filter.fylke.includes('Unge Sentrum');
-          
+      if (filter.fylke !== 'alle' && canSelectFylke) {
+          // Sjekk om vi har et virtuelt (sammenslått) fylke
+          const isVirtualFylke = !filter.fylke.startsWith('Partiet Sentrum') && !filter.fylke.startsWith('Unge Sentrum');
+
           if (isVirtualFylke) {
-              // Hvis vi har valgt et "rent navn" (f.eks. "Agder"), match alle lokallag som hører til dette fylket (uavhengig av org)
-              // Vi må finne parent-IDene for BÅDE PS Agder og US Agder.
-              const parentIds = fylkeslag
-                .filter(f => f.name.includes(filter.fylke)) // Finn både PS og US fylket
-                .map(f => f.id);
-              
+              // Finn parent IDs basert på navn (f.eks "Agder" -> PS Agder ID og US Agder ID)
+              const parentIds = fylkeslag.filter(f => f.name.includes(filter.fylke)).map(f => f.id);
               list = list.filter(l => parentIds.includes(l.parent_id));
-              
           } else {
-              // Vanlig match (hvis spesifikt fylke er valgt via ID/Navn)
               const fylkeObj = fylkeslag.find(f => f.name === filter.fylke);
               if (fylkeObj) list = list.filter(l => l.parent_id === fylkeObj.id);
           }
+      } else if (myOrg?.level === 'county') {
+           list = list.filter(l => l.parent_id === myOrg.id);
       }
-      
-      // Hvis vi viser "Begge", slå sammen duplikater i lokallagslisten også for ryddighet
+
+      // Slå sammen duplikater ved 'alle'
       if (filter.org === 'alle') {
           const uniqueNames = new Set();
           const uniqueList: any[] = [];
@@ -99,17 +88,34 @@ export default function NewMessageForm({ fylkeslag, lokallag, isSuperAdmin, myOr
               const shortName = l.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
               if (!uniqueNames.has(shortName)) {
                   uniqueNames.add(shortName);
-                  uniqueList.push({ id: shortName, name: shortName, isVirtual: true });
+                  uniqueList.push({ id: l.id, name: l.name, shortName: shortName, isVirtual: true });
               }
           });
-          return uniqueList.sort((a, b) => a.name.localeCompare(b.name));
+          return uniqueList.sort((a, b) => a.shortName.localeCompare(b.shortName));
       }
 
-      return list;
-  }, [lokallag, filter.org, filter.fylke, fylkeslag]);
+      return list.map(l => ({...l, shortName: l.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '')}));
+  }, [lokallag, filter.org, filter.fylke, fylkeslag, canSelectFylke, myOrg]);
 
+  
+  // KONVERTER TIL OPTIONS FOR SearchableSelect
+  const fylkeOptions = [
+      { value: 'alle', label: 'Hele landet' },
+      ...filteredFylker.map((f: any) => ({ 
+          // Hvis virtuell, bruk shortName som value også for å trigge logikken over
+          value: f.isVirtual ? f.shortName : f.name, 
+          label: f.shortName 
+      }))
+  ];
 
-  // --- SENDING ---
+  const lokalOptions = [
+      { value: 'alle', label: 'Alle lokallag' },
+      ...filteredLokallag.map((l: any) => ({ 
+          value: l.isVirtual ? l.shortName : l.name, 
+          label: l.shortName 
+      }))
+  ];
+
 
   const handleSend = async () => {
     if (!content.subject || !content.message) {
@@ -120,18 +126,11 @@ export default function NewMessageForm({ fylkeslag, lokallag, isSuperAdmin, myOr
 
     setLoading(true);
     
-    // Vi må "oversette" de virtuelle navnene tilbake til filtre som backend forstår
-    // Hvis filter.org er 'alle', sender vi det, og backend henter begge.
-    // Hvis fylke er 'Agder' (virtuelt), sender vi det som navnestreng, og backend må matche det løst.
-    // *TIPS:* Backend 'email-actions.ts' må oppdateres til å håndtere "løse" fylkesnavn hvis vi sender 'Agder' i stedet for 'Partiet Sentrum Agder'.
-    // Men siden vi allerede har en logikk der som sjekker postnumre basert på fylkesnavn i 'postal_codes', 
-    // så vil det faktisk fungere UTEN å endre backend, fordi 'postal_codes' bruker rene navn (Agder)!
-    // Det eneste er at vi må sørge for at vi ikke sender 'Partiet Sentrum Agder' til backend hvis vi vil treffe US også.
-    
-    // Vi sender rene navn hvis 'alle' er valgt
     const payloadFilter = {
         org: filter.org,
-        fylke: filter.fylke.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', ''), // Rens navnet
+        // Hvis verdien er kortnavn (f.eks "Agder"), er det ok, backend matcher løst. 
+        // Hvis verdien er fullt navn, fjerner vi prefiks for sikkerhets skyld.
+        fylke: filter.fylke === 'LÅST_VIA_LOKAL' ? 'alle' : filter.fylke.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', ''),
         lokal: filter.lokal.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '')
     }
 
@@ -139,7 +138,7 @@ export default function NewMessageForm({ fylkeslag, lokallag, isSuperAdmin, myOr
         subject: content.subject,
         message: content.message,
         filters: payloadFilter,
-        includeUS: filter.org === 'alle' // Hvis alle er valgt, inkluder US eksplisitt
+        includeUS: filter.org === 'alle'
     })
     
     setLoading(false);
@@ -153,13 +152,13 @@ export default function NewMessageForm({ fylkeslag, lokallag, isSuperAdmin, myOr
   }
 
   const inputClass = "w-full p-3 bg-white border border-ps-primary/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-ps-primary/50 text-ps-text placeholder:text-ps-text/40 transition-all disabled:bg-slate-100 disabled:text-slate-500";
-  const showOrgDropdown = isSuperAdmin;
-  const canSelectFylke = isSuperAdmin || myOrg?.level === 'national';
-  const canSelectLokal = isSuperAdmin || myOrg?.level === 'national' || myOrg?.level === 'county';
 
   return (
     <Card>
-        <CardHeader title="Ny melding" description="Send e-post til medlemmer." />
+        <CardHeader 
+            title="Opprett ny utsendelse" 
+            description="Send e-post til medlemmer basert på din rolle."
+        />
         <CardContent className="space-y-6">
             
             <div className="bg-[#fffcf1] p-5 rounded-xl border border-ps-primary/10 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -179,50 +178,52 @@ export default function NewMessageForm({ fylkeslag, lokallag, isSuperAdmin, myOr
                     </select>
                 </div>
 
-                {/* FYLKE */}
+                {/* FYLKE (SØKBAR) */}
                 <div>
                     <label className="text-xs font-bold uppercase text-ps-text/60 mb-1 block">Fylke</label>
-                    <select 
-                        className={inputClass} 
-                        value={canSelectFylke ? filter.fylke : (myOrg?.level === 'county' ? myOrg.name : 'alle')} 
-                        onChange={e => setFilter({...filter, fylke: e.target.value, lokal: 'alle'})}
+                    <SearchableSelect 
+                        options={fylkeOptions}
+                        value={canSelectFylke ? filter.fylke : (myOrg?.level === 'county' ? myOrg.name : 'alle')}
+                        onChange={(val) => setFilter({...filter, fylke: val, lokal: 'alle'})}
                         disabled={!canSelectFylke}
-                    >
-                        <option value="alle">Hele landet</option>
-                        {filteredFylker.map((f: any) => (
-                            <option key={f.id} value={f.name}>
-                                {f.isVirtual ? f.name : f.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '')}
-                            </option>
-                        ))}
-                    </select>
+                        placeholder="Søk fylke..."
+                        className="w-full"
+                    />
                 </div>
 
-                {/* LOKALLAG */}
+                {/* LOKALLAG (SØKBAR) */}
                 <div>
                     <label className="text-xs font-bold uppercase text-ps-text/60 mb-1 block">Lokallag</label>
-                    <select 
-                        className={inputClass} 
-                        value={canSelectLokal ? filter.lokal : (myOrg?.level === 'local' ? myOrg.name : 'alle')} 
-                        onChange={e => setFilter({...filter, lokal: e.target.value})}
+                    <SearchableSelect 
+                        options={lokalOptions}
+                        value={canSelectLokal ? filter.lokal : (myOrg?.level === 'local' ? myOrg.name : 'alle')}
+                        onChange={(val) => setFilter({...filter, lokal: val})}
                         disabled={!canSelectLokal}
-                    >
-                        <option value="alle">Alle lokallag</option>
-                        {filteredLokallag.map((l: any) => (
-                            <option key={l.id} value={l.name}>
-                                {l.isVirtual ? l.name : l.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '')}
-                            </option>
-                        ))}
-                    </select>
+                        placeholder="Søk lokallag..."
+                        className="w-full"
+                    />
                 </div>
             </div>
 
             <div className="space-y-4">
-                <input className={`${inputClass} font-bold text-lg`} placeholder="Emne" value={content.subject} onChange={e => setContent({...content, subject: e.target.value})} />
-                <textarea className={`${inputClass} h-40 resize-none leading-relaxed`} placeholder="Melding..." value={content.message} onChange={e => setContent({...content, message: e.target.value})} />
+                <input 
+                    className={`${inputClass} font-bold text-lg`} 
+                    placeholder="Emne" 
+                    value={content.subject}
+                    onChange={e => setContent({...content, subject: e.target.value})}
+                />
+                <textarea 
+                    className={`${inputClass} h-40 resize-none leading-relaxed`} 
+                    placeholder="Skriv din melding her..." 
+                    value={content.message}
+                    onChange={e => setContent({...content, message: e.target.value})}
+                />
             </div>
 
             <div className="flex justify-end pt-2">
-                <Button onClick={handleSend} isLoading={loading}>🚀 Send melding</Button>
+                <Button onClick={handleSend} isLoading={loading} className="w-full md:w-auto">
+                    🚀 Send melding
+                </Button>
             </div>
 
         </CardContent>

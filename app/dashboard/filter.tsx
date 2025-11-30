@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState, useEffect, useMemo } from 'react'
+import { SearchableSelect } from '@/components/ui/searchable-select' // <--- Bruker den søkbare komponenten
 
 interface Props {
     fylkeslag: any[]
@@ -22,7 +23,7 @@ export default function MemberFilter({ fylkeslag, lokallag, lockedOrgType, locke
   const [lokal, setLokal] = useState(lockedLokal || searchParams.get('lokal') || 'alle')
   const [volunteerType, setVolunteerType] = useState(searchParams.get('vol') || 'alle')
 
-  // --- NY LOGIKK: SAMMENSLÅING AV FYLKER ---
+  // --- LOGIKK: SAMMENSLÅING AV FYLKER ---
   const visibleFylkeslag = useMemo(() => {
       if (orgType === 'alle') {
           const uniqueNames = new Set();
@@ -31,26 +32,15 @@ export default function MemberFilter({ fylkeslag, lokallag, lockedOrgType, locke
               const shortName = f.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
               if (!uniqueNames.has(shortName)) {
                   uniqueNames.add(shortName);
-                  // Vi bruker det "rene" navnet som value hvis vi er i 'alle'-modus
-                  // Men vent, databasen forventer fulle navn. 
-                  // Trikset er å bruke det FØRSTE fulle navnet vi finner som value, 
-                  // men vise det korte navnet.
-                  // ELLER: Vi kan filtrere i page.tsx basert på "inneholder" hvis vi sender kortnavn.
-                  // La oss holde det enkelt: Vi viser kortnavn, men bruker fullt navn (PS-versjonen) som nøkkel.
-                  // Siden page.tsx filtrerer på eksakt match, må vi kanskje være forsiktige her.
-                  
-                  // HVIS vi velger "Agder" her, sender vi "Partiet Sentrum Agder".
-                  // Page.tsx vil da filtrere på "fylkeslag_navn = Partiet Sentrum Agder".
-                  // Dette vil ekskludere US-medlemmer hvis de har "Unge Sentrum Agder".
-                  
-                  // LØSNING: I page.tsx må vi endre filteret til å være smartere hvis org='alle'.
-                  // Men for nå, la oss bare vise listen pent.
-                  uniqueList.push({ id: f.id, name: f.name, shortName: shortName });
+                  // Vi bruker kortnavnet som label, men fullt navn (PS-varianten) som verdi hvis mulig,
+                  // men i 'alle'-modus sender vi kortnavnet til page.tsx som bruker .ilike()
+                  uniqueList.push({ id: f.id, name: shortName, shortName: shortName }); 
+                  // NB: page.tsx må håndtere kortnavn (Agder) ved 'alle'. Vi fikset dette i page.tsx med .ilike()
               }
           });
           return uniqueList.sort((a, b) => a.shortName.localeCompare(b.shortName));
       }
-      // Hvis spesifikk org er valgt, vis kun relevante fylker
+      // Hvis spesifikk org, vis fulle navn
       return fylkeslag.filter(f => f.org_type === orgType).map(f => ({...f, shortName: f.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '')}));
   }, [fylkeslag, orgType]);
 
@@ -59,17 +49,17 @@ export default function MemberFilter({ fylkeslag, lokallag, lockedOrgType, locke
   const visibleLokallag = useMemo(() => {
     if (fylke === 'alle') return lokallag;
 
-    // Finn valgt fylke-objekt for å få ID
-    // (Hvis vi har slått sammen navn, må vi være litt fleksible)
-    const selectedFylkeObj = fylkeslag.find(f => f.name === fylke);
-    
-    if (selectedFylkeObj) {
-        // Match på ID (best)
-        return lokallag.filter(l => l.parent_id === selectedFylkeObj.id);
-    } 
-    
-    // Fallback på navn
+    // 1. Prøv å matche på parent_id først (best)
+    // Vi må finne fylkes-objektet. Hvis vi har "Agder" (kortnavn), må vi finne PS eller US Agder.
     const shortFylke = fylke.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
+    const fylkeObjs = fylkeslag.filter(f => f.name.includes(shortFylke));
+    const fylkeIds = fylkeObjs.map(f => f.id);
+    
+    if (fylkeIds.length > 0) {
+        return lokallag.filter(l => fylkeIds.includes(l.parent_id));
+    }
+
+    // 2. Fallback på navn
     return lokallag.filter(l => l.name.includes(shortFylke));
 
   }, [fylke, lokallag, fylkeslag]);
@@ -99,6 +89,26 @@ export default function MemberFilter({ fylkeslag, lokallag, lockedOrgType, locke
     return () => clearTimeout(timer)
   }, [search, fylke, lokal, orgType, volunteerType, lockedOrgType, lockedFylke, lockedLokal, router])
 
+
+  // KONVERTER LISTENE TIL {label, value} FORMAT FOR SearchableSelect
+  const fylkeOptions = [
+      { value: 'alle', label: 'Hele landet' },
+      ...visibleFylkeslag.map((l: any) => ({ 
+          // Hvis vi er i "alle"-modus, er l.name allerede kortnavnet. 
+          // Hvis vi er i PS-modus, er l.name fullt navn.
+          value: l.name, 
+          label: l.shortName 
+      }))
+  ];
+
+  const lokalOptions = [
+      { value: 'alle', label: 'Alle lokallag' },
+      ...visibleLokallag.map((l: any) => ({ 
+          value: l.name, 
+          label: l.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '') 
+      }))
+  ];
+
   return (
     <div className="bg-white p-5 rounded-xl shadow-sm border border-ps-primary/10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
       
@@ -115,6 +125,7 @@ export default function MemberFilter({ fylkeslag, lokallag, lockedOrgType, locke
 
       <div className="w-full">
         <label className="filter-label">Frivillig</label>
+        {/* Standard select for små lister */}
         <select 
             value={volunteerType} 
             onChange={(e) => setVolunteerType(e.target.value)} 
@@ -144,38 +155,30 @@ export default function MemberFilter({ fylkeslag, lokallag, lockedOrgType, locke
         </select>
       </div>
 
+      {/* FYLKE SØKBAR */}
       <div className="w-full">
         <label className="filter-label">Fylke</label>
-        <select 
+        <SearchableSelect 
+            options={fylkeOptions} 
             value={lockedFylke || fylke} 
-            onChange={(e) => { setFylke(e.target.value); setLokal('alle'); }} 
-            className={`filter-input ${lockedFylke ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`}
+            onChange={(val) => { setFylke(val); setLokal('alle'); }}
             disabled={!!lockedFylke}
-        >
-          <option value="alle">Hele landet</option>
-          {visibleFylkeslag.map((lag: any) => (
-            <option key={lag.id} value={lag.name}>
-                {lag.shortName}
-            </option>
-          ))}
-        </select>
+            placeholder="Søk fylke..."
+            className="w-full" // Sikrer at den fyller plassen
+        />
       </div>
 
+      {/* LOKALLAG SØKBAR */}
       <div className="w-full">
         <label className="filter-label">Lokallag</label>
-        <select 
+        <SearchableSelect 
+            options={lokalOptions} 
             value={lockedLokal || lokal} 
-            onChange={(e) => setLokal(e.target.value)} 
-            className={`filter-input ${(lockedLokal) ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`}
+            onChange={setLokal}
             disabled={!!lockedLokal}
-        >
-          <option value="alle">Alle lokallag</option>
-          {visibleLokallag.map((lag) => (
-            <option key={lag.id} value={lag.name}>
-                {lag.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '')}
-            </option>
-          ))}
-        </select>
+            placeholder="Søk lokallag..."
+            className="w-full"
+        />
       </div>
 
       <style jsx>{`
