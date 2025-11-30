@@ -32,13 +32,13 @@ export default function MemberFilter({ fylkeslag, lokallag, lockedOrgType, locke
               const shortName = f.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
               if (!uniqueNames.has(shortName)) {
                   uniqueNames.add(shortName);
-                  // Vi bruker kortnavn som value også når "alle" er valgt,
-                  // fordi page.tsx bruker .ilike() for å matche
+                  // Når "alle" er valgt, bruker vi kortnavnet som value for å matche begge orgs i page.tsx
                   uniqueList.push({ id: f.id, name: shortName, shortName: shortName }); 
               }
           });
           return uniqueList.sort((a, b) => a.shortName.localeCompare(b.shortName));
       }
+      // Hvis spesifikk org, bruk fullt navn som value
       return fylkeslag.filter(f => f.org_type === orgType).map(f => ({...f, shortName: f.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '')}));
   }, [fylkeslag, orgType]);
 
@@ -47,38 +47,26 @@ export default function MemberFilter({ fylkeslag, lokallag, lockedOrgType, locke
   const visibleLokallag = useMemo(() => {
     let filteredList = lokallag;
 
-    // 1. Filtrer på Org Type (hvis spesifikk er valgt)
+    // 1. Filtrer på Org Type
     if (orgType !== 'alle') {
         filteredList = lokallag.filter(l => l.org_type === orgType);
     }
 
     // 2. Filtrer på Fylke
     if (fylke !== 'alle') {
-        // Hvis vi er i "alle"-modus, er fylke "Agder" (kortnavn).
-        // Hvis vi er i PS-modus, er fylke "Partiet Sentrum Agder".
-        
         // Prøv å finne fylkes-objektet via navn
-        const fylkeObj = fylkeslag.find(f => f.name === fylke);
-
-        if (fylkeObj) {
-            // Match på ID (best hvis vi har eksakt match)
-            filteredList = filteredList.filter(l => l.parent_id === fylkeObj.id);
+        const shortFylkeName = fylke.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
+        
+        // Finn relevante fylkes-IDer (kan være flere hvis 'alle' er valgt)
+        const parentIds = fylkeslag
+            .filter(f => f.name.includes(shortFylkeName))
+            .map(f => f.id);
+        
+        if (parentIds.length > 0) {
+            filteredList = filteredList.filter(l => parentIds.includes(l.parent_id));
         } else {
-            // Fallback: Hvis vi har kortnavn ("Agder"), finn alle fylker som heter noe med Agder
-            // (Dette er nødvendig hvis "alle" er valgt og vi har slått sammen fylker i listen over)
-            const shortFylkeName = fylke.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
-            
-            // Finn ID-ene til BÅDE PS og US fylkeslagene
-            const relevantCountyIds = fylkeslag
-                .filter(f => f.name.includes(shortFylkeName))
-                .map(f => f.id);
-            
-            if (relevantCountyIds.length > 0) {
-                filteredList = filteredList.filter(l => relevantCountyIds.includes(l.parent_id));
-            } else {
-                // Siste utvei: Navn-matching
-                filteredList = filteredList.filter(l => l.name.includes(shortFylkeName));
-            }
+            // Fallback på navnematch
+            filteredList = filteredList.filter(l => l.name.includes(shortFylkeName));
         }
     }
 
@@ -131,7 +119,7 @@ export default function MemberFilter({ fylkeslag, lokallag, lockedOrgType, locke
   const fylkeOptions = [
       { value: 'alle', label: 'Hele landet' },
       ...visibleFylkeslag.map((l: any) => ({ 
-          value: l.name, // Dette er enten fullt navn eller kortnavn avhengig av modus
+          value: l.name, 
           label: l.shortName 
       }))
   ];
@@ -139,8 +127,8 @@ export default function MemberFilter({ fylkeslag, lokallag, lockedOrgType, locke
   const lokalOptions = [
       { value: 'alle', label: 'Alle lokallag' },
       ...visibleLokallag.map((l: any) => ({ 
-          value: l.name, // Samme her
-          label: l.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '') 
+          value: l.name, // Her bruker vi navnet fra den filtrerte/sammenslåtte listen
+          label: l.shortName || l.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '') 
       }))
   ];
 
@@ -202,13 +190,42 @@ export default function MemberFilter({ fylkeslag, lokallag, lockedOrgType, locke
         />
       </div>
 
-      {/* LOKALLAG SØKBAR */}
+      {/* LOKALLAG SØKBAR (MED AUTO-SETT FYLKE) */}
       <div className="w-full">
         <label className="filter-label">Lokallag</label>
         <SearchableSelect 
             options={lokalOptions} 
             value={lockedLokal || lokal} 
-            onChange={setLokal}
+            onChange={(val) => {
+                setLokal(val);
+
+                // --- AUTO-SETT FYLKE LOGIKK ---
+                if (val !== 'alle') {
+                    // Vi må finne hvilket fylke dette lokallaget tilhører.
+                    // Vi søker i den RÅ listen (lokallag-prop) for å finne objektet med parent_id,
+                    // siden 'val' kan være et kortnavn hvis vi er i 'alle'-modus.
+                    
+                    // Håndter både kortnavn ("Ål") og fullt navn ("Partiet Sentrum Ål")
+                    const match = lokallag.find(l => 
+                        l.name === val || 
+                        l.name.endsWith(' ' + val) || // "Partiet Sentrum Ål" slutter på " Ål"
+                        l.name === `Partiet Sentrum ${val}` ||
+                        l.name === `Unge Sentrum ${val}`
+                    );
+
+                    if (match && match.parent_id) {
+                        const parent = fylkeslag.find(f => f.id === match.parent_id);
+                        if (parent) {
+                            // Hvis orgType er 'alle', må vi sette fylke til kortnavnet for at dropdown skal vise det riktig
+                            let fylkeNameToSet = parent.name;
+                            if (orgType === 'alle') {
+                                fylkeNameToSet = parent.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
+                            }
+                            setFylke(fylkeNameToSet);
+                        }
+                    }
+                }
+            }}
             disabled={!!lockedLokal}
             placeholder="Søk lokallag..."
             className="w-full"

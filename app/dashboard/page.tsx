@@ -268,15 +268,25 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
       queryBuilder = queryBuilder.or(`first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
   }
   
-  // --- GEOGRAFI FILTER (ROBUST) ---
-  // Bruker ilike for å matche "Oslo" mot "Partiet Sentrum Oslo" osv.
+  // --- GEOGRAFI FILTER ---
+  
+  // FYLKE: Bruk ilike for å være fleksibel på PS/US/Navn
   if (filters.fylke && filters.fylke !== 'alle') {
       const cleanFylke = filters.fylke.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
       queryBuilder = queryBuilder.ilike('fylkeslag_navn', `%${cleanFylke}%`);
   }
+  
+  // LOKALLAG: Bruk EQ (Nøyaktig) for å unngå Ål/Ålesund-feil
   if (filters.lokal && filters.lokal !== 'alle') {
       const cleanLokal = filters.lokal.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
-      queryBuilder = queryBuilder.ilike('lokallag_navn', `%${cleanLokal}%`);
+      
+      // Vi må matche enten "Partiet Sentrum Ål" ELLER "Unge Sentrum Ål" ELLER bare "Ål" (hvis databasen er rar).
+      // Siden vi ikke kan bruke .eq() med OR direkte på samme felt enkelt i denne byggeren uten rå-SQL,
+      // bruker vi en smart .or() streng.
+      
+      // Sjekk nøyaktig match mot PS-navn, US-navn, eller rent navn.
+      // Dette hindrer at "Ål" matcher "Ålesund".
+      queryBuilder = queryBuilder.or(`lokallag_navn.eq.Partiet Sentrum ${cleanLokal},lokallag_navn.eq.Unge Sentrum ${cleanLokal},lokallag_navn.eq.${cleanLokal}`);
   }
   
   // --- ORG TYPE FILTER ---
