@@ -1,84 +1,97 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
+import { createAdminClient } from '@/utils/supabase/admin' // Krever at du har laget denne utils-filen
 import { revalidatePath } from 'next/cache'
 
-/**
- * Updates a member's profile information from the Dashboard Edit Modal.
- */
-export async function updateMember(formData: FormData) {
+// TILDEL ADMIN ROLLE
+export async function assignAdminRole(formData: FormData) {
   const supabase = await createClient()
-
-  // 1. Security Check: Ensure the user is logged in
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    throw new Error('Unauthorized: You must be logged in to perform this action.')
-  }
-
-  const id = formData.get('id') as string
   
-  // 2. Collect the fields we want to update
-  const updates = {
-    first_name: formData.get('first_name'),
-    last_name: formData.get('last_name'),
-    email: formData.get('email'),
-    phone: formData.get('phone'),
-    postal_code: formData.get('postal_code'),
-    payment_status: formData.get('payment_status'),
-    // We add 'updated_at' to keep track of changes
-    updated_at: new Date().toISOString(),
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: myRole } = await supabase.from('admin_roles').select('role').eq('user_id', user?.id).single()
+  
+  if (myRole?.role !== 'superadmin') {
+      return { error: 'Kun Superadmin kan tildele roller.' }
   }
 
-  // 3. Perform the update in Supabase
+  const userId = formData.get('userId') as string
+  const orgId = formData.get('orgId') as string
+  const orgType = formData.get('orgType') as string
+  const role = formData.get('role') as string
+
   const { error } = await supabase
-    .from('members')
-    .update(updates)
-    .eq('id', id)
+    .from('admin_roles')
+    .insert({
+        user_id: userId,
+        role: role,
+        org_id: orgId,
+        org_sub_type: orgType
+    })
 
   if (error) {
-    console.error('Database Error:', error)
-    return { error: error.message }
+      console.error(error)
+      return { error: 'Kunne ikke tildele rolle. Er personen allerede admin her?' }
   }
 
-  // 4. Refresh the dashboard to show new data immediately
   revalidatePath('/dashboard')
   return { success: true }
 }
 
-/**
- * Sends a simulated payment reminder email and updates the timestamp.
- */
-export async function sendReminder(memberId: string) {
-  const supabase = await createClient()
-  
-  // 1. Security Check
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    throw new Error('Unauthorized')
-  }
+// FJERN ADMIN ROLLE
+export async function removeAdminRole(roleId: string) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: myRole } = await supabase.from('admin_roles').select('role').eq('user_id', user?.id).single()
+    if (myRole?.role !== 'superadmin') return { error: 'Ingen tilgang' }
 
-  try {
-    // 2. SIMULATE EMAIL SENDING
-    // In a real production app, you would call an API like SendGrid, Resend, or Mailgun here.
-    // Example: await resend.emails.send({ to: memberEmail, subject: "Påminnelse...", ... })
-    
-    // For now, we simulate a network delay of 800ms
-    await new Promise(resolve => setTimeout(resolve, 800))
+    const { error } = await supabase.from('admin_roles').delete().eq('id', roleId)
+    if (error) return { error: error.message }
 
-    // 3. Update the database to record that we sent a reminder today
-    const { error } = await supabase
-      .from('members')
-      .update({ last_reminder_sent_at: new Date().toISOString() })
-      .eq('id', memberId)
-
-    if (error) throw error
-
-    // 4. Refresh UI
     revalidatePath('/dashboard')
     return { success: true }
+}
 
-  } catch (error: any) {
-    console.error('Reminder Error:', error)
-    return { error: error.message }
+// LEGG TIL MEDLEM MANUELT (Admin-funksjon)
+export async function addMemberManually(formData: FormData) {
+  const supabase = await createClient()
+  
+  // 1. Sjekk tilgang (Må være admin)
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Unauthorized' }
+  
+  // Her bør du ideelt sett sjekke admin_roles også
+  // ...
+
+  const email = formData.get('email') as string
+  const password = 'Password123!' // Midlertidig passord, bruker bør bytte eller bruke magic link
+
+  // 2. Bruk Admin API for å opprette bruker (Bypasser email confirmation hvis ønskelig)
+  const supabaseAdmin = createAdminClient()
+  
+  const { error } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true, // Auto-bekreft e-posten
+      user_metadata: {
+          first_name: formData.get('firstName'),
+          last_name: formData.get('lastName'),
+          phone: formData.get('phone'),
+          zip: formData.get('zip'),
+          birth_date: formData.get('birthDate'),
+          // Standard: Ordinært medlem
+          membership_selection: { ordinary: 'ordinary_mid', youth: false } 
+      }
+  })
+
+  if (error) {
+      console.error("Add member error:", error)
+      return { error: error.message }
   }
+
+  // Triggeren i databasen (handle_new_user) vil automatisk opprette raden i 'members'-tabellen
+  // og sette lokallag basert på postnummer.
+
+  revalidatePath('/dashboard')
+  return { success: true }
 }
