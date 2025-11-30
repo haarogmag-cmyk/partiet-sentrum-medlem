@@ -1,43 +1,54 @@
 'use client'
 
 import { useState } from 'react'
-import { sendReminder } from './actions'
+// RETTELSE: Vi importerer fra economy-actions i stedet for ./actions
+import { sendPaymentReminder } from './tabs/economy-actions'
+import { Button } from '@/components/ui/button'
+import { toast } from 'sonner'
 
 export default function ReminderButton({ memberId, lastSent }: { memberId: string, lastSent: string | null }) {
   const [loading, setLoading] = useState(false)
-  
-  // Sjekk om det er sendt purring i dag
-  const isSentToday = lastSent && new Date(lastSent).toDateString() === new Date().toDateString()
 
-  const handleClick = async () => {
-    if (!confirm('Vil du sende en betalingspåminnelse til dette medlemmet på e-post?')) return
+  const handleSend = async () => {
+    if (!confirm('Vil du sende en betalingspåminnelse på e-post til dette medlemmet?')) return;
 
     setLoading(true)
-    await sendReminder(memberId)
+    // Vi kaller den nye funksjonen med 'membership' som type
+    const res = await sendPaymentReminder('membership', memberId)
     setLoading(false)
+
+    if (res?.error) {
+        toast.error(res.error)
+    } else {
+        toast.success('Påminnelse sendt!')
+    }
   }
 
-  if (isSentToday) {
-    return (
-      <span className="text-xs font-bold text-green-600 bg-green-50 px-3 py-1.5 rounded border border-green-200 inline-flex items-center gap-1">
-        Sendt i dag ✅
-      </span>
-    )
+  // Hvis nylig purret, vis dato i stedet for knapp (valgfritt design)
+  if (lastSent) {
+      const date = new Date(lastSent).toLocaleDateString('no-NO', { day: 'numeric', month: 'short' });
+      return (
+        <div className="flex items-center gap-2">
+            <span className="text-[10px] text-orange-600 bg-orange-50 px-2 py-1 rounded border border-orange-100">
+               🔔 Purret {date}
+            </span>
+            {/* Mulighet for å purre igjen */}
+            <button onClick={handleSend} className="text-[10px] text-slate-400 underline hover:text-ps-text" disabled={loading}>
+                Send på nytt
+            </button>
+        </div>
+      )
   }
 
   return (
-    <button 
-      onClick={handleClick}
-      disabled={loading}
-      className="text-xs font-bold text-slate-600 bg-white hover:bg-slate-50 hover:text-[#c93960] border border-slate-200 px-3 py-1.5 rounded transition-colors disabled:opacity-50 flex items-center gap-2"
+    <Button 
+        variant="ghost" 
+        size="sm" 
+        onClick={handleSend} 
+        isLoading={loading}
+        className="text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50 h-8"
     >
-      {loading ? (
-        <span>Sender...</span>
-      ) : (
-        <>
-          <span>🔔</span> Send påminnelse
-        </>
-      )}
-    </button>
+        🔔 Send påminnelse
+    </Button>
   )
 }
