@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState, useEffect, useMemo } from 'react'
-import { SearchableSelect } from '@/components/ui/searchable-select' // <--- Bruker den søkbare komponenten
+import { SearchableSelect } from '@/components/ui/searchable-select'
 
 interface Props {
     fylkeslag: any[]
@@ -32,43 +32,80 @@ export default function MemberFilter({ fylkeslag, lokallag, lockedOrgType, locke
               const shortName = f.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
               if (!uniqueNames.has(shortName)) {
                   uniqueNames.add(shortName);
-                  // Vi bruker kortnavnet som label, men fullt navn (PS-varianten) som verdi hvis mulig,
-                  // men i 'alle'-modus sender vi kortnavnet til page.tsx som bruker .ilike()
+                  // Vi bruker kortnavn som value også når "alle" er valgt,
+                  // fordi page.tsx bruker .ilike() for å matche
                   uniqueList.push({ id: f.id, name: shortName, shortName: shortName }); 
-                  // NB: page.tsx må håndtere kortnavn (Agder) ved 'alle'. Vi fikset dette i page.tsx med .ilike()
               }
           });
           return uniqueList.sort((a, b) => a.shortName.localeCompare(b.shortName));
       }
-      // Hvis spesifikk org, vis fulle navn
       return fylkeslag.filter(f => f.org_type === orgType).map(f => ({...f, shortName: f.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '')}));
   }, [fylkeslag, orgType]);
 
 
-  // --- LOKALLAG FILTRERING ---
+  // --- LOKALLAG FILTRERING (MED SAMMENSLÅING) ---
   const visibleLokallag = useMemo(() => {
-    if (fylke === 'alle') return lokallag;
+    let filteredList = lokallag;
 
-    // 1. Prøv å matche på parent_id først (best)
-    // Vi må finne fylkes-objektet. Hvis vi har "Agder" (kortnavn), må vi finne PS eller US Agder.
-    const shortFylke = fylke.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
-    const fylkeObjs = fylkeslag.filter(f => f.name.includes(shortFylke));
-    const fylkeIds = fylkeObjs.map(f => f.id);
-    
-    if (fylkeIds.length > 0) {
-        return lokallag.filter(l => fylkeIds.includes(l.parent_id));
+    // 1. Filtrer på Org Type (hvis spesifikk er valgt)
+    if (orgType !== 'alle') {
+        filteredList = lokallag.filter(l => l.org_type === orgType);
     }
 
-    // 2. Fallback på navn
-    return lokallag.filter(l => l.name.includes(shortFylke));
+    // 2. Filtrer på Fylke
+    if (fylke !== 'alle') {
+        // Hvis vi er i "alle"-modus, er fylke "Agder" (kortnavn).
+        // Hvis vi er i PS-modus, er fylke "Partiet Sentrum Agder".
+        
+        // Prøv å finne fylkes-objektet via navn
+        const fylkeObj = fylkeslag.find(f => f.name === fylke);
 
-  }, [fylke, lokallag, fylkeslag]);
+        if (fylkeObj) {
+            // Match på ID (best hvis vi har eksakt match)
+            filteredList = filteredList.filter(l => l.parent_id === fylkeObj.id);
+        } else {
+            // Fallback: Hvis vi har kortnavn ("Agder"), finn alle fylker som heter noe med Agder
+            // (Dette er nødvendig hvis "alle" er valgt og vi har slått sammen fylker i listen over)
+            const shortFylkeName = fylke.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
+            
+            // Finn ID-ene til BÅDE PS og US fylkeslagene
+            const relevantCountyIds = fylkeslag
+                .filter(f => f.name.includes(shortFylkeName))
+                .map(f => f.id);
+            
+            if (relevantCountyIds.length > 0) {
+                filteredList = filteredList.filter(l => relevantCountyIds.includes(l.parent_id));
+            } else {
+                // Siste utvei: Navn-matching
+                filteredList = filteredList.filter(l => l.name.includes(shortFylkeName));
+            }
+        }
+    }
+
+    // 3. SAMMENSLÅING AV DUPLIKATER (Hvis orgType er 'alle')
+    if (orgType === 'alle') {
+        const uniqueNames = new Set();
+        const uniqueList: any[] = [];
+        
+        filteredList.forEach(l => {
+            const shortName = l.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
+            if (!uniqueNames.has(shortName)) {
+                uniqueNames.add(shortName);
+                // Bruk kortnavn som value
+                uniqueList.push({ id: l.id, name: shortName, shortName: shortName });
+            }
+        });
+        return uniqueList.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    return filteredList;
+
+  }, [fylke, lokallag, fylkeslag, orgType]);
 
 
   useEffect(() => {
     const timer = setTimeout(() => {
       const params = new URLSearchParams()
-      
       if (search) params.set('q', search)
       
       const finalOrg = lockedOrgType || orgType;
@@ -90,13 +127,11 @@ export default function MemberFilter({ fylkeslag, lokallag, lockedOrgType, locke
   }, [search, fylke, lokal, orgType, volunteerType, lockedOrgType, lockedFylke, lockedLokal, router])
 
 
-  // KONVERTER LISTENE TIL {label, value} FORMAT FOR SearchableSelect
+  // KONVERTER TIL OPTIONS
   const fylkeOptions = [
       { value: 'alle', label: 'Hele landet' },
       ...visibleFylkeslag.map((l: any) => ({ 
-          // Hvis vi er i "alle"-modus, er l.name allerede kortnavnet. 
-          // Hvis vi er i PS-modus, er l.name fullt navn.
-          value: l.name, 
+          value: l.name, // Dette er enten fullt navn eller kortnavn avhengig av modus
           label: l.shortName 
       }))
   ];
@@ -104,7 +139,7 @@ export default function MemberFilter({ fylkeslag, lokallag, lockedOrgType, locke
   const lokalOptions = [
       { value: 'alle', label: 'Alle lokallag' },
       ...visibleLokallag.map((l: any) => ({ 
-          value: l.name, 
+          value: l.name, // Samme her
           label: l.name.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '') 
       }))
   ];
@@ -125,7 +160,6 @@ export default function MemberFilter({ fylkeslag, lokallag, lockedOrgType, locke
 
       <div className="w-full">
         <label className="filter-label">Frivillig</label>
-        {/* Standard select for små lister */}
         <select 
             value={volunteerType} 
             onChange={(e) => setVolunteerType(e.target.value)} 
@@ -164,7 +198,7 @@ export default function MemberFilter({ fylkeslag, lokallag, lockedOrgType, locke
             onChange={(val) => { setFylke(val); setLokal('alle'); }}
             disabled={!!lockedFylke}
             placeholder="Søk fylke..."
-            className="w-full" // Sikrer at den fyller plassen
+            className="w-full"
         />
       </div>
 
