@@ -17,7 +17,7 @@ import Pagination from './pagination';
 import DashboardTable from './dashboard-table';
 import GrowthChart from '@/components/dashboard/growth-chart';
 import TasksWidget from '@/components/dashboard/tasks-widget';
-import { CsvImportModal } from '@/components/dashboard/csv-import-modal';
+// Vi trenger ikke CsvImportModal her lenger, den er flyttet til DashboardTable
 
 // UI Komponenter
 import { Badge } from '@/components/ui/badge';
@@ -144,16 +144,7 @@ export default async function Dashboard(props: {
         </div>
         
         <div className="flex gap-3">
-             {permissions.canEditMembers && (
-                 <>
-                    <CsvImportModal>
-                        <Button variant="secondary">📥 Importer CSV</Button>
-                    </CsvImportModal>
-                    <Link href="/bli-medlem">
-                        <Button variant="secondary">+ Ny manuell</Button>
-                    </Link>
-                 </>
-             )}
+             {/* KNAPPENE ER FJERNET HERFRA. DE LIGGER NÅ I TABELLEN LENGER NED. */}
              <form action={signOut}>
                 <Button variant="ghost">Logg ut</Button>
              </form>
@@ -268,25 +259,14 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
       queryBuilder = queryBuilder.or(`first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
   }
   
-  // --- GEOGRAFI FILTER ---
-  
-  // FYLKE: Bruk ilike for å være fleksibel på PS/US/Navn
+  // --- GEOGRAFI FILTER (ROBUST) ---
   if (filters.fylke && filters.fylke !== 'alle') {
       const cleanFylke = filters.fylke.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
       queryBuilder = queryBuilder.ilike('fylkeslag_navn', `%${cleanFylke}%`);
   }
-  
-  // LOKALLAG: Bruk EQ (Nøyaktig) for å unngå Ål/Ålesund-feil
   if (filters.lokal && filters.lokal !== 'alle') {
       const cleanLokal = filters.lokal.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
-      
-      // Vi må matche enten "Partiet Sentrum Ål" ELLER "Unge Sentrum Ål" ELLER bare "Ål" (hvis databasen er rar).
-      // Siden vi ikke kan bruke .eq() med OR direkte på samme felt enkelt i denne byggeren uten rå-SQL,
-      // bruker vi en smart .or() streng.
-      
-      // Sjekk nøyaktig match mot PS-navn, US-navn, eller rent navn.
-      // Dette hindrer at "Ål" matcher "Ålesund".
-      queryBuilder = queryBuilder.or(`lokallag_navn.eq.Partiet Sentrum ${cleanLokal},lokallag_navn.eq.Unge Sentrum ${cleanLokal},lokallag_navn.eq.${cleanLokal}`);
+      queryBuilder = queryBuilder.ilike('lokallag_navn', `%${cleanLokal}%`);
   }
   
   // --- ORG TYPE FILTER ---
@@ -328,7 +308,7 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
   else if (filters.org === 'ps') orgLabel = '(PS)';
   else if (filters.org === 'alle') orgLabel = '(Begge)';
 
-  // Beregn tall for KPI kortene (basert på listen vi hentet)
+  // Beregn tall for KPI kortene
   const paidCount = memberList.filter((m:any) => {
       if (filters.org === 'us') return m.payment_status_us === 'active';
       if (filters.org === 'ps') return m.payment_status_ps === 'active';
@@ -344,6 +324,7 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
         
+        {/* SEKSJON 1: KPI & GRAFIKK */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="space-y-4">
                 <StatsCard title="Totalt i utvalg" count={totalItems} />
@@ -356,8 +337,10 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
             </div>
         </div>
 
+        {/* SEKSJON 2: CRM OPPGAVER */}
         {tasks && tasks.length > 0 && <TasksWidget tasks={tasks} />}
 
+        {/* SEKSJON 3: MEDLEMSLISTE */}
         <div className="space-y-4">
             <MemberFilter 
                 fylkeslag={fylkeslag} 
@@ -375,7 +358,7 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
                 organizations={allOrgs || []} 
                 canEdit={permissions.canEditMembers}
                 canManageRoles={permissions.canManageRoles}
-                canCreate={permissions.canEditMembers}
+                canCreate={permissions.canEditMembers} // <-- Ny knapp er her inne!
             />
             
             <Pagination currentPage={currentPage} totalPages={totalPages} searchParams={searchParams} />
