@@ -6,46 +6,45 @@ import { revalidatePath } from 'next/cache'
 export async function updateProfile(formData: FormData) {
   const supabase = await createClient()
   
-  // 1. Sikkerhet: Sjekk hvem som er logget inn
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Unauthorized')
+  if (!user) return { error: 'Du er ikke logget inn.' }
 
-  // 2. Hent data
+  // 1. Hent data
   const email = formData.get('email') as string
   const phone = formData.get('phone') as string
   const zip = formData.get('zip') as string
-  // Hvis du har lagt til 'address' (gateadresse) i tabellen, hent den her:
-  // const address = formData.get('address') as string
 
-  // 3. Validering (Enkel)
+  // 2. Validering
   if (!email || !email.includes('@')) {
       return { error: 'Ugyldig e-postadresse.' }
   }
-  if (zip && zip.length !== 4) {
-      return { error: 'Postnummer må være 4 siffer.' }
+
+  // 3. Bygg oppdateringsobjektet
+  const updates: any = {
+      email: email,
+      phone: phone,
+      updated_at: new Date().toISOString()
   }
 
-  // 4. Oppdater KUN tillatte felter i databasen
+  // Kun oppdater postnummer hvis det faktisk er sendt med og er gyldig
+  if (zip && zip.length === 4) {
+      updates.postal_code = zip;
+  }
+
+  console.log("Forsøker å oppdatere bruker:", user.id);
+  console.log("Data som sendes:", updates);
+
+  // 4. Oppdater databasen
   const { error } = await supabase
     .from('members')
-    .update({
-        email: email,
-        phone: phone,
-        postal_code: zip,
-        // address: address 
-    })
-    .eq('id', user.id) // VIKTIG: Oppdater kun min egen bruker
+    .update(updates)
+    .eq('id', user.id) // Oppdaterer KUN min rad
 
   if (error) {
-      console.error('Profile update error:', error)
-      return { error: 'Kunne ikke lagre endringene. Prøv igjen senere.' }
+      // VIKTIG: Denne loggen vil vises i terminalen din i VS Code (eller Vercel logs)
+      console.error('❌ DATABASE FEIL VED OPPDATERING:', error)
+      return { error: `Lagring feilet: ${error.message} (Kode: ${error.code})` }
   }
-
-  // 5. (Valgfritt) Oppdater Auth-epost også (Sender bekreftelsesmail)
-  /* if (email !== user.email) {
-     await supabase.auth.updateUser({ email: email }) 
-  }
-  */
 
   revalidatePath('/minside')
   return { success: true }
