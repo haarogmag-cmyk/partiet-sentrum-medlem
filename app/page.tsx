@@ -75,7 +75,7 @@ export default async function Home() {
                            Vanlig: Lys lilla bakgrunn (#E0CFFC), Mørk tekst (#5e1639).
                            Hover: Hvit bakgrunn, Sentrum-rød tekst (#c93960), Sentrum-rød kant.
                         */}
-                        <Button className="bg-[#E0CFFC] text-[#5e1639] border-2 border-[#E0CFFC] font-bold py-6 px-8 text-lg shadow-xl hover:bg-white hover:text-[#c93960] hover:border-[#c93960] transition-colors">
+                        <Button className="bg-[#8a63d2] text-[#5e1639] border-2 border-[#8a63d2] font-bold py-6 px-8 text-lg shadow-xl hover:bg-white hover:text-[#c93960] hover:border-[#c93960] transition-colors">
                             Bli US-medlem →
                         </Button>
                     </Link>
