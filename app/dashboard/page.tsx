@@ -272,25 +272,23 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
       queryBuilder = queryBuilder.or(`first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
   }
   
-  // --- GEOGRAFI FILTER (OPPDATERT FOR "BEGGE"-SØK) ---
+  // --- GEOGRAFI FILTER (OPPDATERT FOR NØYAKTIG MATCH) ---
   if (filters.fylke && filters.fylke !== 'alle') {
-      // Hvis vi har valgt "Begge", kommer fylkesnavnet uten prefiks (f.eks "Agder")
-      // Vi bruker ilike for å matche både "Partiet Sentrum Agder" og "Unge Sentrum Agder"
-      queryBuilder = queryBuilder.ilike('fylkeslag_navn', `%${filters.fylke}%`);
+      // Fylke er også utsatt for delvis match (Agder vs Vest-Agder), så vi bruker nøyaktig logikk her også
+      queryBuilder = queryBuilder.or(`fylkeslag_navn.eq.Partiet Sentrum ${filters.fylke},fylkeslag_navn.eq.Unge Sentrum ${filters.fylke}`);
   }
   if (filters.lokal && filters.lokal !== 'alle') {
-      queryBuilder = queryBuilder.ilike('lokallag_navn', `%${filters.lokal}%`);
+      // HER ER FIKSEN FOR ÅL / ÅLESUND:
+      // Vi krever at navnet er nøyaktig likt enten PS-varianten eller US-varianten.
+      queryBuilder = queryBuilder.or(`lokallag_navn.eq.Partiet Sentrum ${filters.lokal},lokallag_navn.eq.Unge Sentrum ${filters.lokal}`);
   }
   
   // --- ORG TYPE FILTER ---
   if (filters.org === 'us') {
     queryBuilder = queryBuilder.contains('membership_type', { youth: true });
   } else if (filters.org === 'ps') {
-    // Hvis man velger KUN PS, vil man ofte utelukke de som bare er støttemedlemmer/ungdom uten PS-medlemskap?
-    // Eller vi viser alle som ikke har 'not_applicable'
     queryBuilder = queryBuilder.neq('payment_status_ps', 'not_applicable');
   }
-  // Hvis filters.org === 'alle' (eller tom), gjør vi ingen filtrering her -> viser begge.
 
   if (volunteerFilter && volunteerFilter !== 'alle') {
       queryBuilder = queryBuilder.contains('volunteer_roles', { [volunteerFilter]: true });
