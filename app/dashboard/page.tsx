@@ -95,23 +95,21 @@ export default async function Dashboard(props: {
   // --- 4. PARAMETERE ---
   const currentTab = typeof searchParams.tab === 'string' ? searchParams.tab : 'medlemmer';
   
-  // A. Filtre for MEDLEMSLISTE
-  // Hvis Superadmin ikke har valgt org, er den 'alle' (eller 'ps' default i filterkomponenten, men her håndterer vi 'alle')
   let orgFilter = typeof searchParams.org === 'string' ? searchParams.org : '';
-  if (!isSuperAdmin && !orgFilter) {
+  if (!isSuperAdmin) {
       orgFilter = myOrgType; 
   }
 
   const activeFylke = lockedFylke || (typeof searchParams.fylke === 'string' ? searchParams.fylke : '');
   const activeLokal = lockedLokal || (typeof searchParams.lokal === 'string' ? searchParams.lokal : '');
 
-  const memberFilters = {
+  const dashboardFilters = {
       org: orgFilter,
       fylke: activeFylke,
       lokal: activeLokal
   };
 
-  // B. Filtre for ØKONOMI
+  // ØKONOMI FILTRE
   const economyFilters = {
       org: typeof searchParams.eco_org === 'string' ? searchParams.eco_org : (isSuperAdmin ? 'ps' : myOrgType),
       fylke: lockedFylke || (typeof searchParams.eco_fylke === 'string' ? searchParams.eco_fylke : ''),
@@ -133,9 +131,7 @@ export default async function Dashboard(props: {
         <div>
           <div className="flex items-center gap-2 mb-1">
              {myOrgType === 'us' ? <Badge variant="us">Unge Sentrum</Badge> : <Badge variant="ps">Partiet Sentrum</Badge>}
-             
              {isSuperAdmin ? <Badge variant="warning">Superadmin</Badge> : <Badge variant="neutral">{translateRole(userRole)}</Badge>}
-             
              {!isSuperAdmin && org && <Badge variant="neutral">{org.name}</Badge>}
           </div>
           
@@ -172,7 +168,7 @@ export default async function Dashboard(props: {
             <MedlemmerContent 
                 searchParams={searchParams} 
                 supabase={supabase} 
-                filters={memberFilters}
+                filters={dashboardFilters}
                 lockedOrgType={!isSuperAdmin ? myOrgType : null}
                 lockedFylke={lockedFylke}
                 lockedLokal={lockedLokal}
@@ -202,7 +198,7 @@ export default async function Dashboard(props: {
         {/* 4. ARRANGEMENT */}
         {currentTab === 'arrangement' && (
             <ArrangementView 
-                filters={memberFilters} 
+                filters={dashboardFilters} 
                 defaultOrgId={defaultOrgId} 
                 permissions={permissions}
             />
@@ -272,15 +268,15 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
       queryBuilder = queryBuilder.or(`first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
   }
   
-  // --- GEOGRAFI FILTER (OPPDATERT FOR NØYAKTIG MATCH) ---
+  // --- GEOGRAFI FILTER (ROBUST) ---
+  // Bruker ilike for å matche "Oslo" mot "Partiet Sentrum Oslo" osv.
   if (filters.fylke && filters.fylke !== 'alle') {
-      // Fylke er også utsatt for delvis match (Agder vs Vest-Agder), så vi bruker nøyaktig logikk her også
-      queryBuilder = queryBuilder.or(`fylkeslag_navn.eq.Partiet Sentrum ${filters.fylke},fylkeslag_navn.eq.Unge Sentrum ${filters.fylke}`);
+      const cleanFylke = filters.fylke.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
+      queryBuilder = queryBuilder.ilike('fylkeslag_navn', `%${cleanFylke}%`);
   }
   if (filters.lokal && filters.lokal !== 'alle') {
-      // HER ER FIKSEN FOR ÅL / ÅLESUND:
-      // Vi krever at navnet er nøyaktig likt enten PS-varianten eller US-varianten.
-      queryBuilder = queryBuilder.or(`lokallag_navn.eq.Partiet Sentrum ${filters.lokal},lokallag_navn.eq.Unge Sentrum ${filters.lokal}`);
+      const cleanLokal = filters.lokal.replace('Partiet Sentrum ', '').replace('Unge Sentrum ', '');
+      queryBuilder = queryBuilder.ilike('lokallag_navn', `%${cleanLokal}%`);
   }
   
   // --- ORG TYPE FILTER ---
@@ -299,8 +295,6 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
   // HENT ALLE ORGANISASJONER
   const { data: allOrgs } = await supabase.from('organizations').select('id, name, level, org_type, parent_id').order('name');
 
-  // Vi filtrerer disse i klientkomponenten (filter.tsx) nå, så vi sender bare med alt.
-  // Men vi trenger en standardliste for initial render hvis nødvendig.
   const fylkeslag = allOrgs?.filter((o:any) => o.level === 'county') || [];
   const lokallag = allOrgs?.filter((o:any) => o.level === 'local') || [];
 
@@ -324,13 +318,10 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
   else if (filters.org === 'ps') orgLabel = '(PS)';
   else if (filters.org === 'alle') orgLabel = '(Begge)';
 
-  // Beregn tall for KPI kortene basert på nåværende liste (eller total count hvis paginert)
-  // For nøyaktighet på tvers av sider burde vi kjøre egne count-queries, men filter-basert telling på klient-liste er ok for små sett.
-  // Her bruker vi listen vi hentet.
+  // Beregn tall for KPI kortene (basert på listen vi hentet)
   const paidCount = memberList.filter((m:any) => {
       if (filters.org === 'us') return m.payment_status_us === 'active';
       if (filters.org === 'ps') return m.payment_status_ps === 'active';
-      // Hvis begge: Sjekk om minst én er aktiv
       return m.payment_status_ps === 'active' || m.payment_status_us === 'active';
   }).length;
 
@@ -339,7 +330,6 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
       if (filters.org === 'ps') return m.payment_status_ps !== 'active';
       return m.payment_status_ps !== 'active' && m.payment_status_us !== 'active';
   }).length;
-
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -350,6 +340,7 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
                 <StatsCard title={`Betalende ${orgLabel}`} count={paidCount} variant="success" />
                 <StatsCard title={`Ubetalt ${orgLabel}`} count={unpaidCount} variant="danger" />
             </div>
+
             <div className="lg:col-span-2 h-full">
                 <GrowthChart filters={activeFilters} />
             </div>
