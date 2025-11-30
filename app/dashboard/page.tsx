@@ -17,7 +17,6 @@ import Pagination from './pagination';
 import DashboardTable from './dashboard-table';
 import GrowthChart from '@/components/dashboard/growth-chart';
 import TasksWidget from '@/components/dashboard/tasks-widget';
-import { CsvImportModal } from '@/components/dashboard/csv-import-modal';
 
 // UI Komponenter
 import { Badge } from '@/components/ui/badge';
@@ -38,7 +37,7 @@ export default async function Dashboard(props: {
   if (!user) redirect('/login');
 
   // --- 1. HENT ADMIN ROLLE & HIERARKI ---
-  const { data: adminRole } = await supabase
+  const { data: adminRole, error: roleError } = await supabase
     .from('admin_roles')
     .select(`
         role, 
@@ -52,6 +51,8 @@ export default async function Dashboard(props: {
     `)
     .eq('user_id', user.id)
     .single();
+
+  if (roleError && roleError.code !== 'PGRST116') console.error("Role fetch error:", roleError);
 
   const roleData = adminRole as any;
   
@@ -107,7 +108,7 @@ export default async function Dashboard(props: {
       lokal: activeLokal
   };
 
-  // B. Filtre for ØKONOMI (Egne parametere for drill-down)
+  // ØKONOMI FILTRE
   const economyFilters = {
       org: typeof searchParams.eco_org === 'string' ? searchParams.eco_org : (isSuperAdmin ? 'ps' : myOrgType),
       fylke: lockedFylke || (typeof searchParams.eco_fylke === 'string' ? searchParams.eco_fylke : ''),
@@ -129,9 +130,7 @@ export default async function Dashboard(props: {
         <div>
           <div className="flex items-center gap-2 mb-1">
              {myOrgType === 'us' ? <Badge variant="us">Unge Sentrum</Badge> : <Badge variant="ps">Partiet Sentrum</Badge>}
-             
              {isSuperAdmin ? <Badge variant="warning">Superadmin</Badge> : <Badge variant="neutral">{translateRole(userRole)}</Badge>}
-             
              {!isSuperAdmin && org && <Badge variant="neutral">{org.name}</Badge>}
           </div>
           
@@ -144,16 +143,7 @@ export default async function Dashboard(props: {
         </div>
         
         <div className="flex gap-3">
-             {permissions.canEditMembers && (
-                 <>
-                    <CsvImportModal>
-                        <Button variant="secondary">📥 Importer CSV</Button>
-                    </CsvImportModal>
-                    <Link href="/bli-medlem">
-                        <Button variant="secondary">+ Ny manuell</Button>
-                    </Link>
-                 </>
-             )}
+             {/* Vi fjerner knappene herfra da de er flyttet til tabellen */}
              <form action={signOut}>
                 <Button variant="ghost">Logg ut</Button>
              </form>
@@ -283,11 +273,8 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
 
   const { data: pagedMembers, count: totalCount } = await queryBuilder.order('last_name', { ascending: true }).range(startRange, endRange);
 
-  // HENT ALLE ORGANISASJONER (Til både filter og rolle-modal)
-  const { data: allOrgs } = await supabase
-    .from('organizations')
-    .select('id, name, level, org_type, parent_id') // <--- VIKTIG: parent_id MÅ være her!
-    .order('name');
+  // HENT ALLE ORGANISASJONER
+  const { data: allOrgs } = await supabase.from('organizations').select('id, name, level, org_type, parent_id').order('name');
 
   const fylkeslag = allOrgs?.filter((o:any) => o.level === 'county') || [];
   const lokallag = allOrgs?.filter((o:any) => o.level === 'local') || [];
@@ -306,6 +293,11 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
 
   const activeFilters = { ...filters, q: searchQuery, vol: volunteerFilter };
 
+  // DYNAMISK TITTEL FOR KORTENE
+  let orgLabel = '(Total)';
+  if (filters.org === 'us') orgLabel = '(US)';
+  else if (filters.org === 'ps') orgLabel = '(PS)';
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
         
@@ -313,12 +305,13 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="space-y-4">
                 <StatsCard title="Totalt i utvalg" count={totalItems} />
-                <StatsCard title="Betalende (PS)" count={memberList.filter((m:any) => m.payment_status_ps === 'active').length} variant="success" />
-                <StatsCard title="Ubetalt (PS)" count={memberList.filter((m:any) => m.payment_status_ps !== 'active').length} variant="danger" />
+                {/* Endret tittel til dynamisk */}
+                <StatsCard title={`Betalende ${orgLabel}`} count={memberList.filter((m:any) => (filters.org === 'us' ? m.payment_status_us : m.payment_status_ps) === 'active').length} variant="success" />
+                <StatsCard title={`Ubetalt ${orgLabel}`} count={memberList.filter((m:any) => (filters.org === 'us' ? m.payment_status_us : m.payment_status_ps) !== 'active').length} variant="danger" />
             </div>
 
             <div className="lg:col-span-2 h-full">
-                <GrowthChart filters={activeFilters} /> {/* <--- HER ER ENDRINGEN: FILTRENE SENDES INN */}
+                <GrowthChart filters={activeFilters} />
             </div>
         </div>
 
@@ -343,6 +336,7 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
                 organizations={allOrgs || []} 
                 canEdit={permissions.canEditMembers}
                 canManageRoles={permissions.canManageRoles}
+                canCreate={permissions.canEditMembers} // <--- SENDER RETTIGHET TIL NY/IMPORT
             />
             
             <Pagination currentPage={currentPage} totalPages={totalPages} searchParams={searchParams} />
