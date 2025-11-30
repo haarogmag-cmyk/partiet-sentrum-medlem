@@ -17,7 +17,6 @@ import Pagination from './pagination';
 import DashboardTable from './dashboard-table';
 import GrowthChart from '@/components/dashboard/growth-chart';
 import TasksWidget from '@/components/dashboard/tasks-widget';
-// Vi trenger ikke CsvImportModal her lenger, den er flyttet til DashboardTable
 
 // UI Komponenter
 import { Badge } from '@/components/ui/badge';
@@ -95,6 +94,7 @@ export default async function Dashboard(props: {
   // --- 4. PARAMETERE ---
   const currentTab = typeof searchParams.tab === 'string' ? searchParams.tab : 'medlemmer';
   
+  // A. Filtre for MEDLEMSLISTE
   let orgFilter = typeof searchParams.org === 'string' ? searchParams.org : '';
   if (!isSuperAdmin) {
       orgFilter = myOrgType; 
@@ -109,7 +109,7 @@ export default async function Dashboard(props: {
       lokal: activeLokal
   };
 
-  // ØKONOMI FILTRE
+  // B. Filtre for ØKONOMI
   const economyFilters = {
       org: typeof searchParams.eco_org === 'string' ? searchParams.eco_org : (isSuperAdmin ? 'ps' : myOrgType),
       fylke: lockedFylke || (typeof searchParams.eco_fylke === 'string' ? searchParams.eco_fylke : ''),
@@ -144,7 +144,6 @@ export default async function Dashboard(props: {
         </div>
         
         <div className="flex gap-3">
-             {/* KNAPPENE ER FJERNET HERFRA. DE LIGGER NÅ I TABELLEN LENGER NED. */}
              <form action={signOut}>
                 <Button variant="ghost">Logg ut</Button>
              </form>
@@ -324,23 +323,19 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
         
-        {/* SEKSJON 1: KPI & GRAFIKK */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="space-y-4">
                 <StatsCard title="Totalt i utvalg" count={totalItems} />
                 <StatsCard title={`Betalende ${orgLabel}`} count={paidCount} variant="success" />
                 <StatsCard title={`Ubetalt ${orgLabel}`} count={unpaidCount} variant="danger" />
             </div>
-
             <div className="lg:col-span-2 h-full">
                 <GrowthChart filters={activeFilters} />
             </div>
         </div>
 
-        {/* SEKSJON 2: CRM OPPGAVER */}
         {tasks && tasks.length > 0 && <TasksWidget tasks={tasks} />}
 
-        {/* SEKSJON 3: MEDLEMSLISTE */}
         <div className="space-y-4">
             <MemberFilter 
                 fylkeslag={fylkeslag} 
@@ -358,7 +353,7 @@ async function MedlemmerContent({ searchParams, supabase, filters, lockedOrgType
                 organizations={allOrgs || []} 
                 canEdit={permissions.canEditMembers}
                 canManageRoles={permissions.canManageRoles}
-                canCreate={permissions.canEditMembers} // <-- Ny knapp er her inne!
+                canCreate={permissions.canEditMembers} // <--- VIKTIG: SENDER RETTIGHETEN HER!
             />
             
             <Pagination currentPage={currentPage} totalPages={totalPages} searchParams={searchParams} />
