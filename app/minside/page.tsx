@@ -11,6 +11,7 @@ import VolunteerCard from './volunteer-card';
 import CalendarButton from './calendar-button';
 import EditProfileModal from './edit-profile-modal';
 import GdprControls from './gdpr-controls';
+import MemberResourceList from './member-resource-list'; // <--- VIKTIG IMPORT
 
 export default async function MinSidePage() {
   const supabase = await createClient();
@@ -54,6 +55,12 @@ export default async function MinSidePage() {
   const countyEvents = allEvents?.filter((e: any) => [psFylke?.id, usFylke?.id].includes(e.organization_id)) || [];
   const nationalEvents = allEvents?.filter((e: any) => !e.organization_id) || [];
 
+  // 5. HENT RESSURSER
+  const { data: resources } = await supabase
+    .from('resources')
+    .select('*')
+    .order('created_at', { ascending: false });
+
   const { data: adminRoles } = await supabase.from('admin_roles').select('role').eq('user_id', user.id);
   const isAdmin = adminRoles && adminRoles.length > 0;
 
@@ -84,97 +91,110 @@ export default async function MinSidePage() {
           </div>
         </div>
 
-        {/* TOPP-RAD: MEDLEMSKORT OG PROFIL */}
+        {/* GRID LAYOUT */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
-            {/* 1. MEDLEMSKORT (Venstre) */}
-            <div className="space-y-4">
-                 <MembershipCard 
-                    orgName="Partiet Sentrum" 
-                    name={`${member.first_name} ${member.last_name}`} 
-                    id={member.id} 
-                    status={member.payment_status_ps}
-                    variant="ps"
-                    downloadBtn={<DownloadCertificateButton member={member} orgName="Partiet Sentrum" />}
-                />
-                {isYouth && (
-                    <MembershipCard 
-                        orgName="Unge Sentrum" 
+            {/* --- VENSTRE KOLONNE: Personlig --- */}
+            <div className="space-y-6">
+                
+                {/* 1. MEDLEMSKORT */}
+                <div className="space-y-4">
+                     <MembershipCard 
+                        orgName="Partiet Sentrum" 
                         name={`${member.first_name} ${member.last_name}`} 
                         id={member.id} 
-                        status={member.payment_status_us}
-                        variant="us"
-                        downloadBtn={<DownloadCertificateButton member={member} orgName="Unge Sentrum" />}
+                        status={member.payment_status_ps}
+                        variant="ps"
+                        downloadBtn={<DownloadCertificateButton member={member} orgName="Partiet Sentrum" />}
                     />
-                )}
-            </div>
-
-            {/* 2. MIN PROFIL (Midten) */}
-            <Card className="h-full border-0 shadow-sm">
-                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white rounded-t-xl">
-                    <h3 className="font-bold text-slate-800 text-sm">Min Profil</h3>
-                    <EditProfileModal member={member} />
-                </div>
-                <CardContent className="p-0 text-sm bg-white rounded-b-xl">
-                    <InfoRow label="E-post" value={member.email} />
-                    <InfoRow label="Mobil" value={member.phone} />
-                    <InfoRow label="Adresse" value={`${member.postal_code} ${member.city}`} />
-                    
-                    <div className="bg-slate-50 p-2 font-bold text-[10px] uppercase text-slate-400 pl-4 border-y border-slate-100 mt-2">Partiet Sentrum</div>
-                    <InfoRow label="Lokallag" value={psLokal?.name?.replace('Partiet Sentrum ', '') || 'Ikke funnet'} />
-                    <InfoRow label="Fylke" value={psFylke?.name?.replace('Partiet Sentrum ', '') || 'Ikke funnet'} />
-
                     {isYouth && (
-                        <>
-                            <div className="bg-purple-50 p-2 font-bold text-[10px] uppercase text-purple-400 pl-4 border-y border-purple-100 mt-2">Unge Sentrum</div>
-                            <InfoRow label="Lokallag" value={usLokal?.name?.replace('Unge Sentrum ', '') || 'Ikke funnet'} />
-                            <InfoRow label="Fylke" value={usFylke?.name?.replace('Unge Sentrum ', '') || 'Ikke funnet'} />
-                        </>
+                        <MembershipCard 
+                            orgName="Unge Sentrum" 
+                            name={`${member.first_name} ${member.last_name}`} 
+                            id={member.id} 
+                            status={member.payment_status_us}
+                            variant="us"
+                            downloadBtn={<DownloadCertificateButton member={member} orgName="Unge Sentrum" />}
+                        />
                     )}
-                </CardContent>
-            </Card>
-
-             {/* 3. FRIVILLIG (Høyre) */}
-             <div className="flex flex-col gap-6 h-full">
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex-1">
-                    <h3 className="font-bold text-slate-800 mb-4 text-sm">Vil du bidra?</h3>
-                    <VolunteerCard currentRoles={member.volunteer_roles} />
                 </div>
-             </div>
 
-        </div>
+                {/* 2. MIN PROFIL */}
+                <Card className="border-0 shadow-sm">
+                    <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white rounded-t-xl">
+                        <h3 className="font-bold text-slate-800 text-sm">Min Profil</h3>
+                        <EditProfileModal member={member} />
+                    </div>
+                    <CardContent className="p-0 text-sm bg-white rounded-b-xl">
+                        <InfoRow label="E-post" value={member.email} />
+                        <InfoRow label="Mobil" value={member.phone} />
+                        <InfoRow label="Adresse" value={`${member.postal_code} ${member.city}`} />
+                        
+                        <div className="bg-slate-50 p-2 font-bold text-[10px] uppercase text-slate-400 pl-4 border-y border-slate-100 mt-2">Partiet Sentrum</div>
+                        <InfoRow label="Lokallag" value={psLokal?.name?.replace('Partiet Sentrum ', '') || 'Ikke funnet'} />
+                        <InfoRow label="Fylke" value={psFylke?.name?.replace('Partiet Sentrum ', '') || 'Ikke funnet'} />
 
-        {/* NEDRE DEL: ARRANGEMENTER */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                    <span className="text-2xl">📅</span>
-                    <h2 className="text-xl font-bold text-slate-800">Hva skjer?</h2>
+                        {isYouth && (
+                            <>
+                                <div className="bg-purple-50 p-2 font-bold text-[10px] uppercase text-purple-400 pl-4 border-y border-purple-100 mt-2">Unge Sentrum</div>
+                                <InfoRow label="Lokallag" value={usLokal?.name?.replace('Unge Sentrum ', '') || 'Ikke funnet'} />
+                                <InfoRow label="Fylke" value={usFylke?.name?.replace('Unge Sentrum ', '') || 'Ikke funnet'} />
+                            </>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* 3. GDPR / DATA (Flyttet hit) */}
+                <div>
+                    <h3 className="font-bold text-slate-800 text-sm mb-3 px-1">Medlemskap & Data</h3>
+                    <GdprControls />
                 </div>
-                <CalendarButton />
+
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                 <div className="space-y-4">
-                     <h4 className="text-xs font-bold uppercase text-ps-primary">Lokalt</h4>
-                     {localEvents.length > 0 ? localEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} />) : <p className="text-sm text-slate-400 italic">Ingen møter lokalt.</p>}
-                 </div>
-                 <div className="space-y-4">
-                     <h4 className="text-xs font-bold uppercase text-slate-400">I Fylket</h4>
-                     {countyEvents.length > 0 ? countyEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} />) : <p className="text-sm text-slate-400 italic">Ingen fylkesmøter.</p>}
-                 </div>
-                 <div className="space-y-4">
-                     <h4 className="text-xs font-bold uppercase text-slate-400">Nasjonalt</h4>
-                     {nationalEvents.length > 0 ? nationalEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} />) : <p className="text-sm text-slate-400 italic">Ingen nasjonale møter.</p>}
-                 </div>
+            {/* --- HØYRE KOLONNE (Bredere): Aktivitet --- */}
+            <div className="lg:col-span-2 space-y-6">
+                
+                {/* 4. ARRANGEMENTER */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                            <span className="text-2xl">📅</span>
+                            <h2 className="text-xl font-bold text-slate-800">Hva skjer?</h2>
+                        </div>
+                        <CalendarButton />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                         <div className="space-y-4">
+                             <h4 className="text-xs font-bold uppercase text-ps-primary">Lokalt</h4>
+                             {localEvents.length > 0 ? localEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} />) : <p className="text-sm text-slate-400 italic">Ingen møter lokalt.</p>}
+                         </div>
+                         <div className="space-y-4">
+                             <h4 className="text-xs font-bold uppercase text-slate-400">I Fylket & Nasjonalt</h4>
+                             <div className="space-y-4">
+                                {countyEvents.length > 0 ? countyEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} />) : <p className="text-sm text-slate-400 italic">Ingen fylkesmøter.</p>}
+                                {nationalEvents.length > 0 ? nationalEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} />) : <p className="text-sm text-slate-400 italic">Ingen nasjonale møter.</p>}
+                             </div>
+                         </div>
+                    </div>
+                </div>
+
+                {/* 5. FRIVILLIG & RESSURSER (Side om side) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                        <h3 className="font-bold text-slate-800 mb-4 text-sm">Vil du bidra?</h3>
+                        <VolunteerCard currentRoles={member.volunteer_roles} />
+                     </div>
+                     
+                     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                        <h3 className="font-bold text-slate-800 mb-4 text-sm">Ressursbank</h3>
+                        <MemberResourceList resources={resources || []} />
+                     </div>
+                </div>
+
             </div>
         </div>
-
-        {/* FOOTER: GDPR */}
-        <div className="flex justify-center py-8">
-             <GdprControls />
-        </div>
-
       </div>
     </div>
   );
@@ -194,11 +214,9 @@ function MembershipCard({ orgName, name, id, status, variant, downloadBtn }: any
                 <h2 className="text-sm font-black uppercase tracking-wide opacity-90">{orgName}</h2>
                 <Badge variant="outline" className="text-white border-white/20 bg-white/10 text-[10px]">2025</Badge>
             </div>
-            
             <div>
                 <p className="font-bold text-lg truncate">{name}</p>
                 <p className="font-mono text-[10px] opacity-60 mb-3">ID: {id.slice(0,8)}</p>
-                
                 <div className="flex justify-between items-center">
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold bg-white ${isPaid ? 'text-green-700' : 'text-red-600'}`}>
                         {isPaid ? 'GYLDIG' : 'IKKE BETALT'}
