@@ -109,7 +109,8 @@ export default async function MinSidePage() {
                             id={member.id} 
                             status={member.payment_status_ps}
                             variant="ps"
-                            downloadBtn={<DownloadCertificateButton member={member} orgName="Partiet Sentrum" />}
+                            // ENDRING HER: Lagt til className for hvit knapp
+                            downloadBtn={<DownloadCertificateButton member={member} orgName="Partiet Sentrum" className="border-white/50 text-white hover:bg-white/10 hover:text-white bg-transparent transition-colors" />}
                         />
                         {isYouth && (
                             <MembershipCard 
@@ -118,7 +119,8 @@ export default async function MinSidePage() {
                                 id={member.id} 
                                 status={member.payment_status_us}
                                 variant="us"
-                                downloadBtn={<DownloadCertificateButton member={member} orgName="Unge Sentrum" />}
+                                // ENDRING HER: Lagt til className for hvit knapp
+                                downloadBtn={<DownloadCertificateButton member={member} orgName="Unge Sentrum" className="border-white/50 text-white hover:bg-white/10 hover:text-white bg-transparent transition-colors" />}
                             />
                         )}
                      </div>
@@ -149,7 +151,6 @@ export default async function MinSidePage() {
                         <span className="text-xl">🙌</span>
                         <h3 className="text-lg font-bold text-slate-800">Vil du bidra?</h3>
                     </div>
-                    {/* Fjernet den doble boksen - VolunteerCard er nå ren */}
                     <VolunteerCard currentRoles={member.volunteer_roles} />
                 </div>
 

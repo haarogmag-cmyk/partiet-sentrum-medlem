@@ -1,35 +1,51 @@
 'use client'
 
-import { PDFDownloadLink } from '@react-pdf/renderer';
-import { MembershipCertificate } from '@/components/pdf/membership-certificate';
-import { Button } from '@/components/ui/button';
-import { useEffect, useState } from 'react';
+import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { generateCertificatePDF } from '@/utils/pdf-generator'
 
-// Vi legger til 'orgName' her
-export default function DownloadCertificateButton({ member, orgName }: { member: any, orgName: string }) {
-  const [isClient, setIsClient] = useState(false);
+interface Props {
+    member: any
+    orgName: string
+    className?: string
+}
 
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
+export default function DownloadCertificateButton({ member, orgName, className }: Props) {
+  const [loading, setLoading] = useState(false)
 
-  if (!isClient) {
-    return <Button variant="outline" size="sm" disabled>Laster...</Button>; 
+  const handleDownload = async () => {
+    setLoading(true)
+    try {
+        // Generer PDF i nettleseren
+        const pdfBytes = await generateCertificatePDF(member, orgName)
+        
+        // RETTELSE HER: Vi legger til 'as any' for å fikse TypeScript-feilen
+        const blob = new Blob([pdfBytes as any], { type: 'application/pdf' })
+        
+        const link = document.createElement('a')
+        link.href = URL.createObjectURL(blob)
+        link.download = `Medlemsbevis-${orgName.replace(' ', '-')}.pdf`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+
+    } catch (error) {
+        console.error('PDF Error:', error)
+        alert('Kunne ikke generere beviset. Prøv igjen.')
+    } finally {
+        setLoading(false)
+    }
   }
 
-  const year = new Date().getFullYear();
-  const fileName = `medlemsbevis_${orgName.replace(' ', '_')}_${year}.pdf`;
-
   return (
-    <PDFDownloadLink
-      document={<MembershipCertificate member={member} orgName={orgName} year={year} />}
-      fileName={fileName}
+    <Button 
+        variant="secondary" 
+        size="sm" 
+        onClick={handleDownload} 
+        isLoading={loading}
+        className={className}
     >
-      {({ blob, url, loading, error }) => (
-        <Button variant="outline" className="w-full text-xs mt-4" disabled={loading}>
-          {loading ? 'Genererer...' : `📄 Last ned bevis (${orgName})`}
-        </Button>
-      )}
-    </PDFDownloadLink>
-  );
+        Last ned bevis
+    </Button>
+  )
 }
