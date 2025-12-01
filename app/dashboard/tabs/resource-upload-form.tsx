@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { uploadInternalDoc } from './internal-doc-actions'
+import { uploadResource } from './resource-actions'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
@@ -9,13 +9,12 @@ import { toast } from 'sonner'
 interface Props {
   isOpen: boolean
   onClose: () => void
-  orgId: string
   parentId: string | null
 }
 
-const CATEGORIES = ['Referat', 'Økonomi', 'Strategi', 'Personal', 'Annet']
+const CATEGORIES = ['Logo', 'Mal', 'Dokument', 'Bilde', 'Annet']
 
-export default function InternalUploadForm({ isOpen, onClose, orgId, parentId }: Props) {
+export default function ResourceUploadForm({ isOpen, onClose, parentId }: Props) {
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -23,16 +22,15 @@ export default function InternalUploadForm({ isOpen, onClose, orgId, parentId }:
     setLoading(true)
     
     const formData = new FormData(e.currentTarget)
-    formData.append('orgId', orgId)
     if (parentId) formData.append('parentId', parentId)
 
-    const res = await uploadInternalDoc(formData)
+    const res = await uploadResource(formData)
     setLoading(false)
 
     if (res?.error) {
         toast.error(res.error)
     } else {
-        toast.success('Dokument lagret sikkert.')
+        toast.success('Ressurs lastet opp!')
         onClose()
     }
   }
@@ -41,11 +39,10 @@ export default function InternalUploadForm({ isOpen, onClose, orgId, parentId }:
     <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent>
             <DialogHeader>
-                <DialogTitle>Last opp internt dokument</DialogTitle>
+                <DialogTitle>Last opp ressurs</DialogTitle>
             </DialogHeader>
-            <p className="text-xs text-slate-500 mb-4">Lagres kryptert for din organisasjon.</p>
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <input name="title" required className="w-full p-2 border rounded" placeholder="Tittel (f.eks. Referat)" />
+            <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+                <input name="title" required className="w-full p-2 border rounded" placeholder="Tittel på filen" />
                 <select name="category" className="w-full p-2 border rounded bg-white">
                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>

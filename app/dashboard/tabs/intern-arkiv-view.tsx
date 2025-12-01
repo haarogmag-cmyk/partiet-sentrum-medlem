@@ -1,8 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
-import InternalUploadForm from './internal-upload-form'
-import InternalList from './internal-list'
-import ArchiveFilter from './archive-filter' // <--- NY
-import { Badge } from '@/components/ui/badge'
+import ArchiveFilter from './archive-filter'
+import InternArkivBrowser from './intern-arkiv-browser' // <--- NY IMPORT
 
 interface Props {
     permissions: any
@@ -19,7 +17,6 @@ export default async function InternArkivView({ permissions, searchParams, isSup
   let targetOrgName = "";
   
   if (isSuperAdmin) {
-      // Superadmin bruker filter
       const orgType = searchParams.arkiv_org || 'ps';
       const fylke = searchParams.arkiv_fylke;
       const lokal = searchParams.arkiv_lokal;
@@ -36,18 +33,17 @@ export default async function InternArkivView({ permissions, searchParams, isSup
           targetOrgId = data?.id; targetOrgName = data?.name || "Nasjonalt";
       }
   } else {
-      // Vanlig leder ser KUN sin org
       targetOrgId = myOrg?.id;
       targetOrgName = myOrg?.name;
   }
 
-  // 2. HENT DOKUMENTER (For valgt org)
+  // 2. HENT DOKUMENTER
   let docs: any[] = [];
   if (targetOrgId) {
       const { data } = await supabase
         .from('internal_docs')
         .select('*')
-        .eq('org_id', targetOrgId) // <--- Filtrerer på org!
+        .eq('org_id', targetOrgId)
         .order('created_at', { ascending: false });
       docs = data || [];
   }
@@ -58,33 +54,26 @@ export default async function InternArkivView({ permissions, searchParams, isSup
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       
-      {/* HEADER & FILTER */}
       <div>
           <div className="flex justify-between items-start mb-4">
               <div>
-                  <h2 className="text-2xl font-bold text-[#5e1639] flex items-center gap-2">
-                    <span>🔐</span> Styringsarkiv
-                  </h2>
-                  <p className="text-slate-500">Konfidensielle dokumenter for: <strong className="text-ps-primary">{targetOrgName}</strong></p>
+                  <h2 className="text-2xl font-bold text-[#5e1639]">Styringsarkiv</h2>
+                  <p className="text-slate-500">Dokumenter for: <strong className="text-ps-primary">{targetOrgName}</strong></p>
               </div>
           </div>
 
-          {isSuperAdmin && (
-              <ArchiveFilter allOrgs={allOrgs || []} isSuperAdmin={isSuperAdmin} />
-          )}
+          {isSuperAdmin && <ArchiveFilter allOrgs={allOrgs || []} isSuperAdmin={isSuperAdmin} />}
       </div>
 
-      {/* LAST OPP & LISTE */}
       {targetOrgId ? (
-          <>
-            {permissions.canManageEvents && ( // Antar ledere har denne tilgangen, eller bruk canEditMembers
-                 <InternalUploadForm orgId={targetOrgId} /> 
-            )}
-            <InternalList docs={docs} />
-          </>
+          <InternArkivBrowser 
+              docs={docs} 
+              canEdit={permissions.canManageEvents} // Juster rettighet etter behov
+              orgId={targetOrgId}
+          />
       ) : (
           <div className="p-12 text-center border-2 border-dashed border-slate-200 rounded-xl text-slate-400">
-              Ingen organisasjon valgt eller funnet.
+              Ingen organisasjon valgt.
           </div>
       )}
     </div>
