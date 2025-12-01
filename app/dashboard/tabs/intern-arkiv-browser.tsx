@@ -31,6 +31,16 @@ export default function InternArkivBrowser({ docs, canEdit, orgId }: Props) {
       else toast.error('Kunne ikke åpne filen')
   }
 
+  // NY: Håndter sletting
+  const handleDelete = async (item: any) => {
+      if(!confirm(`Er du sikker på at du vil slette "${item.title}"?`)) return
+      
+      const res = await deleteInternalDoc(item.id, item.file_path, item.is_folder)
+      
+      if(res?.error) toast.error(res.error)
+      else toast.success('Dokument slettet')
+  }
+
   return (
     <>
         <FileExplorer 
@@ -39,6 +49,7 @@ export default function InternArkivBrowser({ docs, canEdit, orgId }: Props) {
             onUpload={handleUploadClick}
             onCreateFolder={handleCreateFolder}
             onDownload={handleDownload}
+            onDelete={handleDelete} // <--- Kobler til sletting
         />
         <InternalUploadForm 
             isOpen={isUploadOpen} 

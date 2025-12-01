@@ -20,6 +20,16 @@ export default function RessursBrowser({ resources, canEdit }: { resources: any[
       window.open(url, '_blank')
   }
 
+  // NY: Håndter sletting
+  const handleDelete = async (item: any) => {
+      if(!confirm(`Er du sikker på at du vil slette "${item.title}"?`)) return
+      
+      const res = await deleteResource(item.id, item.file_path, item.is_folder)
+      
+      if(res?.error) toast.error(res.error)
+      else toast.success('Slettet!')
+  }
+
   return (
     <>
         <FileExplorer 
@@ -28,6 +38,7 @@ export default function RessursBrowser({ resources, canEdit }: { resources: any[
             onUpload={handleUploadClick}
             onCreateFolder={createResourceFolder}
             onDownload={handleDownload}
+            onDelete={handleDelete} // <--- Kobler til sletting
         />
         <ResourceUploadForm 
             isOpen={isUploadOpen} 
