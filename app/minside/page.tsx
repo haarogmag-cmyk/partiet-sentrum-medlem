@@ -1,7 +1,7 @@
 import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
@@ -69,37 +69,61 @@ export default async function MinSidePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-ps-text">
-      
-      {/* --- HEADER --- */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-ps-primary rounded-full flex items-center justify-center text-white font-bold text-sm">
-                      {member.first_name[0]}
-                  </div>
-                  <div>
-                      <h1 className="text-lg font-bold leading-tight">{member.first_name} {member.last_name}</h1>
-                      <p className="text-[10px] text-slate-500 uppercase tracking-wider">Min Side</p>
-                  </div>
-              </div>
-              <div className="flex gap-2">
-                  {isAdmin && <Link href="/dashboard"><Button variant="secondary" size="sm" className="hidden sm:flex">Admin</Button></Link>}
-                  <form action={signOut}><Button variant="ghost" size="sm">Logg ut</Button></form>
-              </div>
-          </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen p-4 md:p-8 font-sans bg-[#FAFAFA] text-slate-900">
+      <div className="w-full max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
         
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-            
-            {/* --- VENSTRE KOLONNE (HOVEDFOKUS) --- */}
-            <div className="lg:col-span-2 space-y-8">
+        {/* HEADER & PROFIL I ETT */}
+        <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-start gap-8">
+            <div className="flex-1">
+                <h1 className="text-3xl md:text-4xl font-black tracking-tight text-[#c93960] mb-2">Hei, {member.first_name}! 👋</h1>
+                <p className="text-slate-500 text-lg mb-6">Her har du oversikten over ditt medlemskap.</p>
                 
-                {/* 1. MEDLEMSKORT */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                     <MembershipCard 
+                <div className="flex flex-wrap gap-6 text-sm text-slate-600">
+                    <div>
+                        <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">E-POST</p>
+                        <p>{member.email}</p>
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">MOBIL</p>
+                        <p>{member.phone}</p>
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">ADRESSE</p>
+                        <p>{member.postal_code} {member.city}</p>
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">LOKALLAG</p>
+                        <p>{psLokal?.name?.replace('Partiet Sentrum ', '') || 'Ikke funnet'}</p>
+                    </div>
+                </div>
+                <div className="mt-6">
+                     <EditProfileModal member={member} />
+                </div>
+            </div>
+            
+            <div className="flex flex-col gap-3 items-end">
+                <div className="flex gap-3">
+                    {isAdmin && (
+                        <Link href="/dashboard">
+                            <Button variant="secondary" className="rounded-full px-6 bg-slate-100 hover:bg-slate-200 border-0">Admin Dashboard</Button>
+                        </Link>
+                    )}
+                    <form action={signOut}><Button variant="ghost" className="rounded-full px-6">Logg ut</Button></form>
+                </div>
+                <GdprControls /> {/* Minimalistisk GDPR knapp/modal her? Vi flytter den kanskje ned */}
+            </div>
+        </div>
+
+        {/* HOVED GRID */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            {/* VENSTRE (KORT & TING) */}
+            <div className="space-y-8">
+                
+                {/* Medlemskort */}
+                <div className="space-y-4">
+                    <h3 className="text-sm font-bold uppercase text-slate-400 tracking-widest px-1">Dine Kort</h3>
+                    <MembershipCard 
                         orgName="Partiet Sentrum" 
                         name={`${member.first_name} ${member.last_name}`} 
                         id={member.id} 
@@ -119,114 +143,79 @@ export default async function MinSidePage() {
                     )}
                 </div>
 
-                {/* 2. ARRANGEMENTER */}
-                <div>
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                            <span>📅</span> Hva skjer?
-                        </h2>
-                        <CalendarButton />
-                    </div>
-
-                    <div className="space-y-6">
-                        {/* Lokalt */}
-                        {localEvents.length > 0 && (
-                            <div className="bg-white rounded-2xl p-6 border border-ps-primary/20 shadow-sm relative overflow-hidden">
-                                <div className="absolute top-0 left-0 w-1 h-full bg-ps-primary"></div>
-                                <h3 className="text-xs font-black uppercase text-ps-primary mb-4 tracking-wider">I ditt nærmiljø</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {localEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} />)}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Fylke & Nasjonalt */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
-                                <h3 className="text-xs font-black uppercase text-slate-400 mb-4 tracking-wider">I Fylket</h3>
-                                {countyEvents.length > 0 ? (
-                                    <div className="space-y-3">
-                                        {countyEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} simple />)}
-                                    </div>
-                                ) : <p className="text-sm text-slate-400 italic">Ingen fylkesmøter.</p>}
-                            </div>
-
-                            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
-                                <h3 className="text-xs font-black uppercase text-slate-400 mb-4 tracking-wider">Nasjonalt</h3>
-                                {nationalEvents.length > 0 ? (
-                                    <div className="space-y-3">
-                                        {nationalEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} simple />)}
-                                    </div>
-                                ) : <p className="text-sm text-slate-400 italic">Ingen nasjonale møter.</p>}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                 {/* 3. RESSURSBANK (Full bredde i hovedkolonnen) */}
-                 <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
-                    <div className="flex items-center gap-2 mb-4">
-                        <span className="text-xl">📂</span>
-                        <h2 className="text-lg font-bold text-slate-800">Ressursbank</h2>
-                    </div>
-                    <MemberResourceList resources={resources || []} />
-                </div>
-
-            </div>
-
-            {/* --- HØYRE KOLONNE (SIDEBAR) --- */}
-            <div className="space-y-6">
-                
-                {/* 4. MIN PROFIL (Kompakt) */}
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="p-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
-                        <h3 className="font-bold text-slate-700 text-sm">Min Profil</h3>
-                        <EditProfileModal member={member} />
-                    </div>
-                    <div className="p-4 text-sm space-y-3">
-                        <div className="flex justify-between">
-                            <span className="text-slate-400">E-post</span>
-                            <span className="font-medium truncate max-w-[150px]">{member.email}</span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span className="text-slate-400">Tlf</span>
-                            <span className="font-medium">{member.phone}</span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span className="text-slate-400">Post</span>
-                            <span className="font-medium">{member.postal_code} {member.city}</span>
-                        </div>
-                        
-                        <div className="pt-3 mt-3 border-t border-slate-100">
-                            <p className="text-[10px] uppercase text-slate-400 font-bold mb-1">Tilhørighet</p>
-                            <div className="flex justify-between text-xs">
-                                <span>{psLokal?.name?.replace('Partiet Sentrum ', '') || '-'}</span>
-                                <span className="text-slate-400">{psFylke?.name?.replace('Partiet Sentrum ', '') || '-'}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* 5. FRIVILLIG */}
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-                    <div className="flex items-center gap-2 mb-4">
-                        <span className="text-xl">🙌</span>
-                        <h3 className="text-lg font-bold text-slate-800">Vil du bidra?</h3>
-                    </div>
-                    <VolunteerCard currentRoles={member.volunteer_roles} />
-                </div>
-
-                {/* 6. GDPR */}
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-                    <div className="flex items-center gap-2 mb-4">
-                        <span className="text-xl">🔒</span>
-                        <h3 className="text-lg font-bold text-slate-800">Dine Data</h3>
-                    </div>
+                {/* GDPR & Data */}
+                <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                    <h3 className="font-bold text-slate-900 mb-4">Dine data</h3>
+                    <p className="text-sm text-slate-500 mb-4 leading-relaxed">
+                        Du har full kontroll over informasjonen vi har lagret om deg. Last ned eller slett data når som helst.
+                    </p>
                     <GdprControls />
                 </div>
 
             </div>
 
+            {/* MIDTEN (ARRANGEMENTER) */}
+            <div className="lg:col-span-2 space-y-8">
+                
+                <div className="flex justify-between items-end px-1">
+                    <h3 className="text-sm font-bold uppercase text-slate-400 tracking-widest">Det skjer fremover</h3>
+                    <CalendarButton />
+                </div>
+
+                {/* Lokale & Fylke (Viktigst) */}
+                {(localEvents.length > 0 || countyEvents.length > 0) && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {localEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} variant="hero" label="Lokalt" />)}
+                        {countyEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} variant="standard" label="I Fylket" />)}
+                    </div>
+                )}
+
+                {/* Nasjonale (Liste) */}
+                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+                    <div className="p-6 border-b border-slate-50 bg-slate-50/50">
+                        <h4 className="font-bold text-slate-800">Nasjonale samlinger</h4>
+                    </div>
+                    <div className="divide-y divide-slate-50">
+                        {nationalEvents.length > 0 ? nationalEvents.map((ev:any) => (
+                            <Link key={ev.id} href={`/minside/event/${ev.id}`} className="block hover:bg-slate-50 transition-colors p-6 group">
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <p className="text-xs font-bold text-ps-primary uppercase tracking-wider mb-1">
+                                            {new Date(ev.start_time).toLocaleDateString('no-NO', { day: 'numeric', month: 'long' })}
+                                        </p>
+                                        <h5 className="font-bold text-lg text-slate-800 group-hover:text-ps-primary transition-colors">{ev.title}</h5>
+                                        <p className="text-sm text-slate-400 mt-1">📍 {ev.location || 'Digitalt'}</p>
+                                    </div>
+                                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-ps-primary group-hover:text-white transition-all">
+                                        →
+                                    </div>
+                                </div>
+                            </Link>
+                        )) : (
+                            <div className="p-8 text-center text-slate-400 italic">Ingen nasjonale møter planlagt.</div>
+                        )}
+                    </div>
+                </div>
+
+                {/* BUNN-RAD: FRIVILLIG + RESSURSER */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-[#FFF5F7] p-8 rounded-3xl border border-[#FFE0E9]">
+                        <h3 className="font-bold text-[#c93960] text-lg mb-2">Vil du bidra? 🙌</h3>
+                        <p className="text-sm text-[#c93960]/80 mb-6">Huk av for det du kan tenke deg å hjelpe til med.</p>
+                        <VolunteerCard currentRoles={member.volunteer_roles} />
+                    </div>
+                    
+                    <div className="bg-slate-900 text-white p-8 rounded-3xl shadow-lg relative overflow-hidden">
+                         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+                         <div className="relative z-10">
+                            <h3 className="font-bold text-lg mb-2">Ressursbank 📂</h3>
+                            <p className="text-sm text-slate-400 mb-6">Logoer, maler og dokumenter for deg som er aktiv.</p>
+                            <MemberResourceList resources={resources || []} />
+                         </div>
+                    </div>
+                </div>
+
+            </div>
         </div>
       </div>
     </div>
@@ -242,21 +231,20 @@ function MembershipCard({ orgName, name, id, status, variant, downloadBtn }: any
         : 'bg-gradient-to-br from-[#c93960] to-[#8a1c3d]';
 
     return (
-        <div className={`relative w-full rounded-2xl shadow-lg overflow-hidden text-white p-6 flex flex-col justify-between h-48 ${bgClass} transition-transform hover:scale-[1.02]`}>
-            {/* Dekorativ sirkel */}
-            <div className="absolute -top-12 -right-12 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+        <div className={`relative w-full rounded-3xl shadow-xl overflow-hidden text-white p-8 flex flex-col justify-between h-56 ${bgClass} transition-transform hover:scale-[1.02] duration-300`}>
+            <div className="absolute -top-20 -right-20 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
             
             <div className="flex justify-between items-start relative z-10">
-                <h2 className="text-sm font-black uppercase tracking-widest opacity-90">{orgName}</h2>
-                <Badge variant="outline" className="text-white border-white/30 bg-white/10 text-[10px] px-2">2025</Badge>
+                <h2 className="text-sm font-black uppercase tracking-[0.2em] opacity-80">{orgName}</h2>
+                <Badge variant="outline" className="text-white border-white/20 bg-white/10 text-[10px] px-3 py-1 rounded-full">2025</Badge>
             </div>
             
             <div className="relative z-10">
-                <p className="font-bold text-xl truncate mb-1">{name}</p>
-                <p className="font-mono text-[10px] opacity-60 mb-4 tracking-widest">ID: {id.slice(0,8).toUpperCase()}</p>
+                <p className="font-bold text-2xl truncate mb-2 tracking-tight">{name}</p>
+                <p className="font-mono text-xs opacity-60 mb-6 tracking-widest">ID: {id.slice(0,8).toUpperCase()}</p>
                 
                 <div className="flex justify-between items-center">
-                    <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold bg-white shadow-sm ${isPaid ? 'text-green-700' : 'text-red-600'}`}>
+                    <span className={`px-3 py-1.5 rounded-full text-[10px] font-bold bg-white shadow-sm ${isPaid ? 'text-green-700' : 'text-red-600'}`}>
                         {isPaid ? 'GYLDIG MEDLEM' : 'IKKE BETALT'}
                     </span>
                     <div className="scale-90 origin-right opacity-90 hover:opacity-100 transition-opacity">
@@ -268,25 +256,40 @@ function MembershipCard({ orgName, name, id, status, variant, downloadBtn }: any
     )
 }
 
-function EventCard({ ev, simple }: { ev: any, simple?: boolean }) {
+function EventCard({ ev, variant = "standard", label }: { ev: any, variant?: "hero" | "standard", label?: string }) {
     return (
         <Link href={`/minside/event/${ev.id}`} className="block h-full">
-            <div className={`bg-slate-50 hover:bg-white border border-slate-100 hover:border-ps-primary/30 rounded-xl transition-all shadow-sm hover:shadow-md group h-full flex flex-col justify-between ${simple ? 'p-3' : 'p-4'}`}>
-                <div>
-                    <div className="flex justify-between items-start mb-2">
-                        <span className={`font-bold text-ps-primary bg-white rounded border border-ps-primary/10 uppercase tracking-wider ${simple ? 'text-[9px] px-1.5 py-0.5' : 'text-[10px] px-2 py-1'}`}>
+            <div className={`
+                relative overflow-hidden rounded-3xl transition-all duration-300 group h-full flex flex-col justify-between
+                ${variant === 'hero' ? 'bg-[#c93960] text-white p-8 shadow-lg hover:shadow-xl' : 'bg-white border border-slate-100 p-6 shadow-sm hover:shadow-md hover:border-ps-primary/20'}
+            `}>
+                {variant === 'hero' && <div className="absolute top-0 left-0 w-full h-full bg-black/10 group-hover:bg-transparent transition-colors"></div>}
+                
+                <div className="relative z-10">
+                    {label && <span className={`text-[10px] font-bold uppercase tracking-widest mb-3 block ${variant === 'hero' ? 'text-white/60' : 'text-ps-primary'}`}>{label}</span>}
+                    
+                    <div className="flex justify-between items-start mb-3">
+                         <span className={`text-xs font-bold px-2 py-1 rounded uppercase tracking-wider ${variant === 'hero' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
                             {new Date(ev.start_time).toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })}
                         </span>
-                        {ev.is_digital && <Badge variant="us" className="text-[9px] px-1.5">Digitalt</Badge>}
+                        {ev.is_digital && <Badge variant={variant === 'hero' ? 'outline' : 'us'} className={variant === 'hero' ? 'text-white border-white/30' : ''}>Digitalt</Badge>}
                     </div>
-                    <h4 className={`font-bold text-slate-800 leading-tight group-hover:text-ps-primary transition-colors ${simple ? 'text-xs' : 'text-sm'}`}>{ev.title}</h4>
+                    
+                    <h4 className={`font-bold text-xl leading-tight mb-2 ${variant === 'hero' ? 'text-white' : 'text-slate-800 group-hover:text-ps-primary transition-colors'}`}>
+                        {ev.title}
+                    </h4>
                 </div>
-                {!simple && (
-                    <div className="mt-3 pt-3 border-t border-slate-100 text-[10px] text-slate-400 flex items-center gap-1 uppercase font-bold tracking-wider">
-                        <span>📍</span> {ev.location || 'Nett'}
-                    </div>
-                )}
+                
+                <div className={`relative z-10 mt-4 text-xs font-bold uppercase tracking-wider flex items-center gap-2 ${variant === 'hero' ? 'text-white/80' : 'text-slate-400'}`}>
+                    <span>📍 {ev.location || 'Nett'}</span>
+                    <span className="ml-auto">Gå til →</span>
+                </div>
             </div>
         </Link>
     )
+}
+
+// (InfoRow brukes ikke lenger i den nye header-layouten, men kan beholdes hvis du endrer tilbake)
+function InfoRow({ label, value }: { label: string, value: string }) {
+  return <div/> 
 }
