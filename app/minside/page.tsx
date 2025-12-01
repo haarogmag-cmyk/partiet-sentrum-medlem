@@ -110,7 +110,7 @@ export default async function MinSidePage() {
                             status={member.payment_status_ps}
                             variant="ps"
                             // ENDRING HER: Lagt til className for hvit knapp
-                            downloadBtn={<DownloadCertificateButton member={member} orgName="Partiet Sentrum" className="border-white/50 text-white hover:bg-white/10 hover:text-white bg-transparent transition-colors" />}
+                            downloadBtn={<DownloadCertificateButton member={member} orgName="Partiet Sentrum" className="border-white/50 text-transparent hover:bg-white/10 hover:text-white bg-transparent transition-colors" />}
                         />
                         {isYouth && (
                             <MembershipCard 
@@ -120,7 +120,7 @@ export default async function MinSidePage() {
                                 status={member.payment_status_us}
                                 variant="us"
                                 // ENDRING HER: Lagt til className for hvit knapp
-                                downloadBtn={<DownloadCertificateButton member={member} orgName="Unge Sentrum" className="border-white/50 text-white hover:bg-white/10 hover:text-white bg-transparent transition-colors" />}
+                                downloadBtn={<DownloadCertificateButton member={member} orgName="Unge Sentrum" className="border-white/50 text-transparent hover:bg-white/10 hover:text-white bg-transparent transition-colors" />}
                             />
                         )}
                      </div>
