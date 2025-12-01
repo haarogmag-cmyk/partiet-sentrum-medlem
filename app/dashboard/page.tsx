@@ -201,7 +201,12 @@ export default async function Dashboard(props: {
         {/* 6. INTERNT ARKIV */}
         {currentTab === 'arkiv' && (
              permissions.canViewArchive
-              ? <InternArkivView permissions={permissions} />
+              ? <InternArkivView 
+                    permissions={permissions} 
+                    searchParams={searchParams} // <--- NY
+                    isSuperAdmin={isSuperAdmin} // <--- NY
+                    myOrg={org}                 // <--- NY (org-variabelen fra toppen)
+                />
               : <AccessDenied />
         )}
 

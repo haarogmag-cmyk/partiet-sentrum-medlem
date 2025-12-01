@@ -3,32 +3,31 @@
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-// LAST OPP (Kun ledere)
+// LAST OPP (Nå med orgId)
 export async function uploadInternalDoc(formData: FormData) {
   const supabase = await createClient()
   
-  // Sjekk tilgang (Strengere sjekk enn bare innlogget)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Unauthorized')
-
-  // Her burde vi dobbeltsjekke rollen mot admin_roles, men RLS stopper oss uansett hvis vi prøver.
 
   const file = formData.get('file') as File
   const title = formData.get('title') as string
   const category = formData.get('category') as string
+  const orgId = formData.get('orgId') as string // <--- NY
 
-  if (!file || !title) return { error: 'Mangler fil eller tittel' }
+  if (!file || !title || !orgId) return { error: 'Mangler fil, tittel eller organisasjonstilknytning.' }
 
   const fileExt = file.name.split('.').pop()
   const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
-  const filePath = `${category}/${fileName}`
+  // Vi legger filer i mapper basert på orgId for ordenens skyld (valgfritt, men lurt)
+  const filePath = `${orgId}/${category}/${fileName}`
 
   // Last opp til PRIVAT bøtte
   const { error: uploadError } = await supabase.storage
     .from('internal-docs')
     .upload(filePath, file)
 
-  if (uploadError) return { error: 'Kunne ikke laste opp filen til sikkert område.' }
+  if (uploadError) return { error: 'Kunne ikke laste opp filen.' }
 
   // Lagre metadata
   const { error: dbError } = await supabase
@@ -38,7 +37,8 @@ export async function uploadInternalDoc(formData: FormData) {
         category,
         file_path: filePath,
         file_type: fileExt,
-        uploaded_by: user.id
+        uploaded_by: user.id,
+        org_id: orgId // <--- LAGRE ORG ID
     })
 
   if (dbError) return { error: dbError.message }
@@ -47,16 +47,10 @@ export async function uploadInternalDoc(formData: FormData) {
   return { success: true }
 }
 
-// GENERER SIKKER LINK (Signed URL)
+// GENERER SIKKER LINK (Uendret)
 export async function getSecureUrl(filePath: string) {
     const supabase = await createClient()
-    
-    // Lager en link som er gyldig i 60 sekunder
-    const { data, error } = await supabase.storage
-        .from('internal-docs')
-        .createSignedUrl(filePath, 60) 
-
+    const { data, error } = await supabase.storage.from('internal-docs').createSignedUrl(filePath, 60) 
     if (error || !data) return { error: 'Kunne ikke generere sikker lenke.' }
-    
     return { url: data.signedUrl }
 }

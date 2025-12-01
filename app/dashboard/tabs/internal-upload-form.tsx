@@ -1,14 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { uploadInternalDoc } from './internal-doc-actions'
+import { uploadInternalDoc } from './internal-doc-actions' // Sjekk stien
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { toast } from 'sonner'
 
 const CATEGORIES = ['Referat', 'Økonomi', 'Strategi', 'Personal', 'Annet']
 
-export default function InternalUploadForm() {
+// Tar imot orgId som prop
+export default function InternalUploadForm({ orgId }: { orgId: string }) {
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -17,8 +18,10 @@ export default function InternalUploadForm() {
     setLoading(true)
     
     const formData = new FormData(e.currentTarget)
+    // Legg til orgId i dataene som sendes
+    formData.append('orgId', orgId) 
+
     const res = await uploadInternalDoc(formData)
-    
     setLoading(false)
 
     if (res?.error) {
@@ -29,25 +32,21 @@ export default function InternalUploadForm() {
     }
   }
 
-  if (!isOpen) {
-      return <Button onClick={() => setIsOpen(true)} variant="secondary">🔒 Nytt styredokument</Button>
-  }
+  // ... (Resten av JSX er lik, men pass på at du har <input type="file" ... /> riktig) ...
+  if (!isOpen) return <Button onClick={() => setIsOpen(true)} variant="secondary">🔒 Nytt dokument</Button>
 
   return (
     <Card className="mb-8 border-l-4 border-l-yellow-400 bg-yellow-50/30">
         <CardContent className="p-6">
-            <div className="flex justify-between items-center mb-4">
+             {/* ... Header ... */}
+             <div className="flex justify-between items-center mb-4">
                 <h3 className="font-bold text-lg text-[#5e1639]">Last opp internt dokument</h3>
-                <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-red-500">✕</button>
+                <button onClick={() => setIsOpen(false)}>✕</button>
             </div>
-            
-            <p className="text-xs text-slate-500 mb-4">
-                ⚠️ Filer som lastes opp her er <strong>konfidensielle</strong> og kun synlige for styret.
-            </p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input name="title" required className="w-full p-2 border rounded-lg bg-white" placeholder="Tittel (f.eks. Referat 12.03)" />
+                    <input name="title" required className="w-full p-2 border rounded-lg bg-white" placeholder="Tittel" />
                     <select name="category" className="w-full p-2 border rounded-lg bg-white">
                         {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
