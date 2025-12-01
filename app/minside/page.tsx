@@ -31,7 +31,7 @@ export default async function MinSidePage() {
 
   const isYouth = member.membership_type?.youth;
 
-  // 3. HENT ORGANISASJONS-IDer (Med store bokstaver-fiks)
+  // 3. HENT ORGANISASJONS-IDer (Bruk .ilike for å tåle store/små bokstaver)
   const { data: psFylke } = await supabase.from('organizations').select('id, name').ilike('name', `Partiet Sentrum ${member.fylke_navn_raw}`).eq('level', 'county').maybeSingle();
   const { data: psLokal } = await supabase.from('organizations').select('id, name').ilike('name', `Partiet Sentrum ${member.kommune_navn_raw}`).eq('level', 'local').maybeSingle();
 
@@ -73,7 +73,7 @@ export default async function MinSidePage() {
 
   return (
     <div className="min-h-screen p-4 md:p-8 font-sans bg-slate-50 flex flex-col items-center">
-      <div className="w-full max-w-7xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="w-full max-w-7xl space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
         
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
@@ -91,7 +91,7 @@ export default async function MinSidePage() {
           </div>
         </div>
 
-        {/* TOPP-SEKSJON (3 KOLONNER) */}
+        {/* TOPP-RAD: 3 KOLONNER */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
             
             {/* KOLONNE 1: KORT + GDPR */}
@@ -118,14 +118,14 @@ export default async function MinSidePage() {
                     )}
                 </div>
 
-                {/* GDPR - Ligger under kortene */}
+                {/* GDPR */}
                 <div>
                     <h3 className="font-bold text-slate-800 text-sm mb-2 px-1">Medlemskap & Data</h3>
                     <GdprControls />
                 </div>
             </div>
 
-            {/* KOLONNE 2: PROFIL (Midten) */}
+            {/* KOLONNE 2: PROFIL */}
             <Card className="h-full border-0 shadow-sm flex flex-col">
                 <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white rounded-t-xl">
                     <h3 className="font-bold text-slate-800 text-sm">Min Profil</h3>
@@ -150,7 +150,7 @@ export default async function MinSidePage() {
                 </CardContent>
             </Card>
 
-            {/* KOLONNE 3: FRIVILLIG (Høyre) */}
+            {/* KOLONNE 3: FRIVILLIG */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm h-full">
                 <h3 className="font-bold text-slate-800 mb-4 text-sm">Vil du bidra?</h3>
                 <VolunteerCard currentRoles={member.volunteer_roles} />
