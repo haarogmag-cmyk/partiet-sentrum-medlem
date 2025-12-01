@@ -49,7 +49,8 @@ export default async function MinSidePage() {
     .from('events')
     .select('*')
     .eq('is_published', true)
-    .order('start_time', { ascending: false });
+    .gt('start_time', new Date().toISOString()) // Kun fremtidige
+    .order('start_time', { ascending: true });
 
   const localEvents = allEvents?.filter((e: any) => [psLokal?.id, usLokal?.id].includes(e.organization_id)) || [];
   const countyEvents = allEvents?.filter((e: any) => [psFylke?.id, usFylke?.id].includes(e.organization_id)) || [];
@@ -69,154 +70,165 @@ export default async function MinSidePage() {
   }
 
   return (
-    <div className="min-h-screen p-4 md:p-8 font-sans bg-[#FAFAFA] text-slate-900">
-      <div className="w-full max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        
-        {/* HEADER & PROFIL I ETT */}
-        <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-start gap-8">
-            <div className="flex-1">
-                <h1 className="text-3xl md:text-4xl font-black tracking-tight text-[#c93960] mb-2">Hei, {member.first_name}! 👋</h1>
-                <p className="text-slate-500 text-lg mb-6">Her har du oversikten over ditt medlemskap.</p>
-                
-                <div className="flex flex-wrap gap-6 text-sm text-slate-600">
-                    <div>
-                        <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">E-POST</p>
-                        <p>{member.email}</p>
-                    </div>
-                    <div>
-                        <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">MOBIL</p>
-                        <p>{member.phone}</p>
-                    </div>
-                    <div>
-                        <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">ADRESSE</p>
-                        <p>{member.postal_code} {member.city}</p>
-                    </div>
-                    <div>
-                        <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">LOKALLAG</p>
-                        <p>{psLokal?.name?.replace('Partiet Sentrum ', '') || 'Ikke funnet'}</p>
-                    </div>
-                </div>
-                <div className="mt-6">
-                     <EditProfileModal member={member} />
-                </div>
-            </div>
-            
-            <div className="flex flex-col gap-3 items-end">
-                <div className="flex gap-3">
-                    {isAdmin && (
-                        <Link href="/dashboard">
-                            <Button variant="secondary" className="rounded-full px-6 bg-slate-100 hover:bg-slate-200 border-0">Admin Dashboard</Button>
-                        </Link>
-                    )}
-                    <form action={signOut}><Button variant="ghost" className="rounded-full px-6">Logg ut</Button></form>
-                </div>
-                <GdprControls /> {/* Minimalistisk GDPR knapp/modal her? Vi flytter den kanskje ned */}
-            </div>
-        </div>
+    <div className="min-h-screen bg-slate-50 font-sans text-ps-text pb-20">
+      
+      {/* --- HEADER --- */}
+      <div className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+          <div className="max-w-6xl mx-auto px-4 h-16 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-ps-primary rounded-full flex items-center justify-center text-white font-bold text-sm">
+                      {member.first_name[0]}
+                  </div>
+                  <div>
+                      <h1 className="text-sm font-bold leading-tight">{member.first_name} {member.last_name}</h1>
+                      <p className="text-[10px] text-slate-500 uppercase tracking-wider">Min Side</p>
+                  </div>
+              </div>
+              <div className="flex gap-2">
+                  {isAdmin && <Link href="/dashboard"><Button variant="secondary" size="sm" className="hidden sm:flex">Admin Dashboard</Button></Link>}
+                  <form action={signOut}><Button variant="ghost" size="sm">Logg ut</Button></form>
+              </div>
+          </div>
+      </div>
 
-        {/* HOVED GRID */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="max-w-6xl mx-auto px-4 py-8 space-y-10">
+        
+        {/* HOVED-GRID (2 Kolonner) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             
-            {/* VENSTRE (KORT & TING) */}
-            <div className="space-y-8">
+            {/* --- VENSTRE KOLONNE (DINE TING) --- (5/12 bredde) */}
+            <div className="lg:col-span-5 space-y-8">
                 
-                {/* Medlemskort */}
+                {/* 1. MEDLEMSKORT (Viktigst) */}
                 <div className="space-y-4">
-                    <h3 className="text-sm font-bold uppercase text-slate-400 tracking-widest px-1">Dine Kort</h3>
-                    <MembershipCard 
-                        orgName="Partiet Sentrum" 
-                        name={`${member.first_name} ${member.last_name}`} 
-                        id={member.id} 
-                        status={member.payment_status_ps}
-                        variant="ps"
-                        downloadBtn={<DownloadCertificateButton member={member} orgName="Partiet Sentrum" />}
-                    />
-                    {isYouth && (
+                     <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest px-1">Dine Kort</h3>
+                     <div className="grid gap-4">
                         <MembershipCard 
-                            orgName="Unge Sentrum" 
+                            orgName="Partiet Sentrum" 
                             name={`${member.first_name} ${member.last_name}`} 
                             id={member.id} 
-                            status={member.payment_status_us}
-                            variant="us"
-                            downloadBtn={<DownloadCertificateButton member={member} orgName="Unge Sentrum" />}
+                            status={member.payment_status_ps}
+                            variant="ps"
+                            downloadBtn={<DownloadCertificateButton member={member} orgName="Partiet Sentrum" />}
                         />
-                    )}
+                        {isYouth && (
+                            <MembershipCard 
+                                orgName="Unge Sentrum" 
+                                name={`${member.first_name} ${member.last_name}`} 
+                                id={member.id} 
+                                status={member.payment_status_us}
+                                variant="us"
+                                downloadBtn={<DownloadCertificateButton member={member} orgName="Unge Sentrum" />}
+                            />
+                        )}
+                     </div>
                 </div>
 
-                {/* GDPR & Data */}
-                <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                    <h3 className="font-bold text-slate-900 mb-4">Dine data</h3>
-                    <p className="text-sm text-slate-500 mb-4 leading-relaxed">
-                        Du har full kontroll over informasjonen vi har lagret om deg. Last ned eller slett data når som helst.
-                    </p>
-                    <GdprControls />
+                {/* 2. MIN PROFIL */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="p-4 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center">
+                        <h3 className="font-bold text-slate-700 text-sm">Min Profil</h3>
+                        <EditProfileModal member={member} />
+                    </div>
+                    <div className="p-5 text-sm space-y-3">
+                        <InfoRow label="E-post" value={member.email} />
+                        <InfoRow label="Mobil" value={member.phone} />
+                        <InfoRow label="Adresse" value={`${member.postal_code} ${member.city}`} />
+                        
+                        <div className="pt-4 mt-4 border-t border-slate-100">
+                            <p className="text-[10px] uppercase text-slate-400 font-bold mb-2">Tilhørighet</p>
+                            <InfoRow label="Lokallag" value={psLokal?.name?.replace('Partiet Sentrum ', '') || 'Ikke funnet'} />
+                            <InfoRow label="Fylke" value={psFylke?.name?.replace('Partiet Sentrum ', '') || 'Ikke funnet'} />
+                        </div>
+                    </div>
+                </div>
+
+                {/* 3. FRIVILLIG */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                        <span className="text-xl">🙌</span>
+                        <h3 className="text-lg font-bold text-slate-800">Vil du bidra?</h3>
+                    </div>
+                    {/* Fjernet den doble boksen - VolunteerCard er nå ren */}
+                    <VolunteerCard currentRoles={member.volunteer_roles} />
                 </div>
 
             </div>
 
-            {/* MIDTEN (ARRANGEMENTER) */}
-            <div className="lg:col-span-2 space-y-8">
+            {/* --- HØYRE KOLONNE (AKTIVITET) --- (7/12 bredde) */}
+            <div className="lg:col-span-7 space-y-8">
                 
-                <div className="flex justify-between items-end px-1">
-                    <h3 className="text-sm font-bold uppercase text-slate-400 tracking-widest">Det skjer fremover</h3>
-                    <CalendarButton />
-                </div>
-
-                {/* Lokale & Fylke (Viktigst) */}
-                {(localEvents.length > 0 || countyEvents.length > 0) && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {localEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} variant="hero" label="Lokalt" />)}
-                        {countyEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} variant="standard" label="I Fylket" />)}
+                {/* 4. HVA SKJER? (ARRANGEMENTER) */}
+                <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex justify-between items-center mb-8">
+                        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                            <span>📅</span> Hva skjer?
+                        </h2>
+                        <CalendarButton />
                     </div>
-                )}
 
-                {/* Nasjonale (Liste) */}
-                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                    <div className="p-6 border-b border-slate-50 bg-slate-50/50">
-                        <h4 className="font-bold text-slate-800">Nasjonale samlinger</h4>
-                    </div>
-                    <div className="divide-y divide-slate-50">
-                        {nationalEvents.length > 0 ? nationalEvents.map((ev:any) => (
-                            <Link key={ev.id} href={`/minside/event/${ev.id}`} className="block hover:bg-slate-50 transition-colors p-6 group">
-                                <div className="flex justify-between items-center">
-                                    <div>
-                                        <p className="text-xs font-bold text-ps-primary uppercase tracking-wider mb-1">
-                                            {new Date(ev.start_time).toLocaleDateString('no-NO', { day: 'numeric', month: 'long' })}
-                                        </p>
-                                        <h5 className="font-bold text-lg text-slate-800 group-hover:text-ps-primary transition-colors">{ev.title}</h5>
-                                        <p className="text-sm text-slate-400 mt-1">📍 {ev.location || 'Digitalt'}</p>
-                                    </div>
-                                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-ps-primary group-hover:text-white transition-all">
-                                        →
-                                    </div>
+                    <div className="space-y-10">
+                        {/* LOKALT (Fremhevet) */}
+                        <div>
+                            <h4 className="text-xs font-black uppercase text-ps-primary border-b border-ps-primary/20 pb-2 mb-4 tracking-wider">I ditt nærmiljø</h4>
+                            {localEvents.length > 0 ? (
+                                <div className="grid gap-4">
+                                    {localEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} variant="featured" />)}
                                 </div>
-                            </Link>
-                        )) : (
-                            <div className="p-8 text-center text-slate-400 italic">Ingen nasjonale møter planlagt.</div>
-                        )}
+                            ) : (
+                                <p className="text-sm text-slate-400 italic">Ingen lokale møter planlagt akkurat nå.</p>
+                            )}
+                        </div>
+
+                        {/* FYLKE & NASJONALT (Liste) */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div>
+                                <h4 className="text-xs font-bold uppercase text-slate-400 border-b pb-2 mb-4">I Fylket</h4>
+                                {countyEvents.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {countyEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} />)}
+                                    </div>
+                                ) : <p className="text-sm text-slate-400 italic">Ingen fylkesmøter.</p>}
+                            </div>
+
+                            <div>
+                                <h4 className="text-xs font-bold uppercase text-slate-400 border-b pb-2 mb-4">Nasjonalt</h4>
+                                {nationalEvents.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {nationalEvents.map((ev:any) => <EventCard key={ev.id} ev={ev} />)}
+                                    </div>
+                                ) : <p className="text-sm text-slate-400 italic">Ingen nasjonale møter.</p>}
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                {/* BUNN-RAD: FRIVILLIG + RESSURSER */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-[#FFF5F7] p-8 rounded-3xl border border-[#FFE0E9]">
-                        <h3 className="font-bold text-[#c93960] text-lg mb-2">Vil du bidra? 🙌</h3>
-                        <p className="text-sm text-[#c93960]/80 mb-6">Huk av for det du kan tenke deg å hjelpe til med.</p>
-                        <VolunteerCard currentRoles={member.volunteer_roles} />
-                    </div>
-                    
-                    <div className="bg-slate-900 text-white p-8 rounded-3xl shadow-lg relative overflow-hidden">
-                         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
-                         <div className="relative z-10">
-                            <h3 className="font-bold text-lg mb-2">Ressursbank 📂</h3>
-                            <p className="text-sm text-slate-400 mb-6">Logoer, maler og dokumenter for deg som er aktiv.</p>
-                            <MemberResourceList resources={resources || []} />
-                         </div>
-                    </div>
+                {/* 5. RESSURSBANK */}
+                <div className="bg-slate-900 text-white p-8 rounded-2xl shadow-lg relative overflow-hidden">
+                     <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -mr-10 -mt-10 blur-3xl"></div>
+                     <div className="relative z-10">
+                        <div className="flex items-center gap-3 mb-6">
+                            <span className="text-2xl">📂</span>
+                            <div>
+                                <h3 className="font-bold text-lg">Ressursbank</h3>
+                                <p className="text-xs text-slate-400">Dokumenter, logoer og maler.</p>
+                            </div>
+                        </div>
+                        <MemberResourceList resources={resources || []} />
+                     </div>
                 </div>
 
             </div>
         </div>
+
+        {/* --- BUNN: GDPR (Diskret) --- */}
+        <div className="pt-12 mt-12 border-t border-slate-200 text-center">
+            <div className="max-w-md mx-auto opacity-60 hover:opacity-100 transition-opacity">
+                <h3 className="font-bold text-sm mb-4 text-slate-500">Ditt Medlemskap & Personvern</h3>
+                <GdprControls />
+            </div>
+        </div>
+
       </div>
     </div>
   );
@@ -231,23 +243,24 @@ function MembershipCard({ orgName, name, id, status, variant, downloadBtn }: any
         : 'bg-gradient-to-br from-[#c93960] to-[#8a1c3d]';
 
     return (
-        <div className={`relative w-full rounded-3xl shadow-xl overflow-hidden text-white p-8 flex flex-col justify-between h-56 ${bgClass} transition-transform hover:scale-[1.02] duration-300`}>
-            <div className="absolute -top-20 -right-20 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
+        <div className={`relative w-full rounded-2xl shadow-lg overflow-hidden text-white p-6 flex flex-col justify-between h-48 ${bgClass} transition-transform hover:scale-[1.02]`}>
+            <div className="absolute -top-12 -right-12 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
             
             <div className="flex justify-between items-start relative z-10">
-                <h2 className="text-sm font-black uppercase tracking-[0.2em] opacity-80">{orgName}</h2>
-                <Badge variant="outline" className="text-white border-white/20 bg-white/10 text-[10px] px-3 py-1 rounded-full">2025</Badge>
+                <h2 className="text-xs font-black uppercase tracking-[0.15em] opacity-80">{orgName}</h2>
+                <Badge variant="outline" className="text-white border-white/20 bg-white/10 text-[10px] px-2">2025</Badge>
             </div>
             
             <div className="relative z-10">
-                <p className="font-bold text-2xl truncate mb-2 tracking-tight">{name}</p>
-                <p className="font-mono text-xs opacity-60 mb-6 tracking-widest">ID: {id.slice(0,8).toUpperCase()}</p>
+                <p className="font-bold text-xl truncate mb-1 tracking-tight">{name}</p>
+                <p className="font-mono text-[10px] opacity-60 mb-4 tracking-widest">#{id.slice(0,8).toUpperCase()}</p>
                 
-                <div className="flex justify-between items-center">
-                    <span className={`px-3 py-1.5 rounded-full text-[10px] font-bold bg-white shadow-sm ${isPaid ? 'text-green-700' : 'text-red-600'}`}>
-                        {isPaid ? 'GYLDIG MEDLEM' : 'IKKE BETALT'}
-                    </span>
-                    <div className="scale-90 origin-right opacity-90 hover:opacity-100 transition-opacity">
+                <div className="flex justify-between items-center pt-2 border-t border-white/10">
+                    <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${isPaid ? 'bg-green-400' : 'bg-red-400 animate-pulse'}`}></div>
+                        <span className="text-[10px] font-bold">{isPaid ? 'GYLDIG' : 'IKKE BETALT'}</span>
+                    </div>
+                    <div className="scale-90 origin-right">
                         {downloadBtn}
                     </div>
                 </div>
@@ -256,40 +269,40 @@ function MembershipCard({ orgName, name, id, status, variant, downloadBtn }: any
     )
 }
 
-function EventCard({ ev, variant = "standard", label }: { ev: any, variant?: "hero" | "standard", label?: string }) {
+function EventCard({ ev, variant }: { ev: any, variant?: 'featured' }) {
     return (
         <Link href={`/minside/event/${ev.id}`} className="block h-full">
             <div className={`
-                relative overflow-hidden rounded-3xl transition-all duration-300 group h-full flex flex-col justify-between
-                ${variant === 'hero' ? 'bg-[#c93960] text-white p-8 shadow-lg hover:shadow-xl' : 'bg-white border border-slate-100 p-6 shadow-sm hover:shadow-md hover:border-ps-primary/20'}
+                relative overflow-hidden rounded-xl transition-all duration-300 group h-full flex flex-col justify-between border
+                ${variant === 'featured' 
+                    ? 'bg-white border-ps-primary/30 shadow-sm hover:shadow-md p-5' 
+                    : 'bg-slate-50 hover:bg-white border-slate-100 hover:border-ps-primary/20 p-4'
+                }
             `}>
-                {variant === 'hero' && <div className="absolute top-0 left-0 w-full h-full bg-black/10 group-hover:bg-transparent transition-colors"></div>}
-                
-                <div className="relative z-10">
-                    {label && <span className={`text-[10px] font-bold uppercase tracking-widest mb-3 block ${variant === 'hero' ? 'text-white/60' : 'text-ps-primary'}`}>{label}</span>}
-                    
-                    <div className="flex justify-between items-start mb-3">
-                         <span className={`text-xs font-bold px-2 py-1 rounded uppercase tracking-wider ${variant === 'hero' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                <div>
+                    <div className="flex justify-between items-start mb-2">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${variant === 'featured' ? 'bg-ps-primary text-white' : 'bg-white text-slate-500 border border-slate-200'}`}>
                             {new Date(ev.start_time).toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })}
                         </span>
-                        {ev.is_digital && <Badge variant={variant === 'hero' ? 'outline' : 'us'} className={variant === 'hero' ? 'text-white border-white/30' : ''}>Digitalt</Badge>}
+                        {ev.is_digital && <Badge variant="us" className="text-[9px] px-1.5">Digitalt</Badge>}
                     </div>
-                    
-                    <h4 className={`font-bold text-xl leading-tight mb-2 ${variant === 'hero' ? 'text-white' : 'text-slate-800 group-hover:text-ps-primary transition-colors'}`}>
+                    <h4 className={`font-bold leading-tight group-hover:text-ps-primary transition-colors ${variant === 'featured' ? 'text-lg text-slate-900' : 'text-sm text-slate-700'}`}>
                         {ev.title}
                     </h4>
                 </div>
-                
-                <div className={`relative z-10 mt-4 text-xs font-bold uppercase tracking-wider flex items-center gap-2 ${variant === 'hero' ? 'text-white/80' : 'text-slate-400'}`}>
-                    <span>📍 {ev.location || 'Nett'}</span>
-                    <span className="ml-auto">Gå til →</span>
+                <div className="mt-3 pt-3 border-t border-slate-100/50 text-[10px] text-slate-400 flex items-center gap-1 uppercase font-bold tracking-wider">
+                    <span>📍</span> {ev.location || 'Nett'}
                 </div>
             </div>
         </Link>
     )
 }
 
-// (InfoRow brukes ikke lenger i den nye header-layouten, men kan beholdes hvis du endrer tilbake)
 function InfoRow({ label, value }: { label: string, value: string }) {
-  return <div/> 
+  return (
+    <div className="flex justify-between items-center py-2 border-b border-slate-50 last:border-0">
+      <span className="text-slate-400 text-xs font-bold uppercase">{label}</span>
+      <span className="font-medium text-slate-700 text-right truncate max-w-[60%]">{value || '-'}</span>
+    </div>
+  )
 }
