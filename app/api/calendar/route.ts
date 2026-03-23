@@ -1,6 +1,12 @@
 import { createClient } from '@/utils/supabase/server'
 
 export async function GET() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return new Response('BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Partiet Sentrum//Medlemsportal//NO\r\nEND:VCALENDAR', {
+      headers: { 'Content-Type': 'text/calendar; charset=utf-8' }
+    })
+  }
+
   const supabase = await createClient()
 
   // 1. Hent alle PUBLISERTE arrangementer

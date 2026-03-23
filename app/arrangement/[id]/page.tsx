@@ -8,6 +8,11 @@ import ShareButtons from '@/components/share-buttons'
 
 export default async function PublicEventPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return notFound()
+  }
+
   const supabase = await createClient()
 
   // Hent eventet

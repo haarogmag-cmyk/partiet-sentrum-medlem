@@ -4,25 +4,40 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
-export default async function Home() {
-  const supabase = await createClient();
-  
-  // 1. Hent alle fylkeslag
-  const { data: fylkeslag } = await supabase
-    .from('organizations')
-    .select('id, name')
-    .eq('level', 'county')
-    .eq('org_type', 'ps') 
-    .order('name');
+// Sørg for at forsiden alltid er dynamisk (henter fersk data fra Supabase)
+export const dynamic = 'force-dynamic';
 
-  // 2. Hent kommende OFFENTLIGE arrangementer
-  const { data: events } = await supabase
-    .from('events')
-    .select('*')
-    .eq('is_published', true)
-    .gt('start_time', new Date().toISOString()) 
-    .order('start_time', { ascending: true })
-    .limit(3);
+export default async function Home() {
+  let fylkeslag: any[] | null = null;
+  let events: any[] | null = null;
+
+  // Hent data fra Supabase hvis miljøvariabler er konfigurert
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    try {
+      const supabase = await createClient();
+
+      // 1. Hent alle fylkeslag
+      const { data: fylkeslagData } = await supabase
+        .from('organizations')
+        .select('id, name')
+        .eq('level', 'county')
+        .eq('org_type', 'ps')
+        .order('name');
+      fylkeslag = fylkeslagData;
+
+      // 2. Hent kommende OFFENTLIGE arrangementer
+      const { data: eventsData } = await supabase
+        .from('events')
+        .select('*')
+        .eq('is_published', true)
+        .gt('start_time', new Date().toISOString())
+        .order('start_time', { ascending: true })
+        .limit(3);
+      events = eventsData;
+    } catch {
+      // Supabase-tilkobling feilet – vis siden uten dynamisk data
+    }
+  }
 
   return (
     <main className="min-h-screen bg-background font-sans flex flex-col">
