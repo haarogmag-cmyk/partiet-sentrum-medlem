@@ -9,7 +9,6 @@ const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin']
 export const metadata: Metadata = {
   title: 'Partiet Sentrum Medlem',
   description: 'Medlemsportal for Partiet Sentrum og Unge Sentrum',
-  themeColor: '#c93960',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
