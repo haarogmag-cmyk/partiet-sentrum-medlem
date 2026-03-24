@@ -2,29 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,700;0,9..40,900;1,9..40,300&family=DM+Serif+Display:ital@0;1&display=swap');
+
 :root {
-  --ps-primary: 201, 57, 96;
-  --ps-dark: 160, 32, 64;
+  --color-ps: #c93960;
+  --color-ps-dark: #a02040;
+  --color-us: #8a63d2;
 }
 
-.bg-background { background-color: #f8f9fa; }
-.text-ps-primary { color: #c93960; }
-.bg-ps-primary { background-color: #c93960; }
-.hover\:bg-ps-dark:hover { background-color: #a02040; }
-.border-ps-primary { border-color: #c93960; }
-.text-ps-text { color: #1a1a2e; }
-.text-us-primary { color: #8a63d2; }
-.bg-us-primary { background-color: #8a63d2; }
-.ring-ps-primary { --tw-ring-color: #c93960; }
-.focus\:ring-ps-primary\/20:focus { --tw-ring-color: rgba(201,57,96,0.2); }
-.hover\:bg-ps-primary\/5:hover { background-color: rgba(201,57,96,0.05); }
-.hover\:bg-ps-primary\/10:hover { background-color: rgba(201,57,96,0.1); }
-.hover\:bg-ps-primary\/20:hover { background-color: rgba(201,57,96,0.2); }
-.bg-ps-primary\/5 { background-color: rgba(201,57,96,0.05); }
-.bg-ps-primary\/10 { background-color: rgba(201,57,96,0.1); }
-.border-ps-primary\/10 { border-color: rgba(201,57,96,0.1); }
-.border-ps-primary\/20 { border-color: rgba(201,57,96,0.2); }
-.border-ps-primary\/30 { border-color: rgba(201,57,96,0.3); }
-.border-us-primary\/30 { border-color: rgba(138,99,210,0.3); }
-.focus\:border-ps-primary:focus { border-color: #c93960; }
-.focus\:ring-2:focus { --tw-ring-shadow: 0 0 0 2px var(--tw-ring-color); box-shadow: var(--tw-ring-shadow); }
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: #f9f8f6;
+  color: #1a1a2e;
+}
+
+.font-display { font-family: 'DM Serif Display', serif; }
