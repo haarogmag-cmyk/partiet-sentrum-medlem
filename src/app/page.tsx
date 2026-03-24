@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 import type { Fylkeslag } from '@/lib/database.types'
 
 async function getFylkeslag(): Promise<Fylkeslag[]> {
