@@ -26,6 +26,7 @@ export interface Database {
           lokallag: string | null
           is_admin: boolean
           notes: string | null
+          also_unge_sentrum: boolean
           created_at: string
           updated_at: string
         }
@@ -61,6 +62,7 @@ export interface Database {
           period_to: string
           external_payment_id: string | null
           notes: string | null
+          also_unge_sentrum: boolean
           created_at: string
         }
         Insert: Omit<Database['public']['Tables']['membership_payments']['Row'], 'id' | 'created_at'>
