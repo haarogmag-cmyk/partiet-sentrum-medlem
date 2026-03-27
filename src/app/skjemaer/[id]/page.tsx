@@ -1,4 +1,4 @@
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase'
 import { notFound } from 'next/navigation'
 import FormResponseClient from './FormResponseClient'
 
