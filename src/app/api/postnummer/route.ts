@@ -1,60 +1,68 @@
 import { NextResponse } from 'next/server'
 
-// Fylke name → our fylkeslag ID mapping
-const FYLKE_TO_ID: Record<string, number> = {
-  'Oslo':                 1,
-  'Akershus':             2,
-  'Østfold':              3,
-  'Innlandet':            4,
-  'Buskerud':             5,
-  'Vestfold og Telemark': 6,
-  'Telemark':             6,
-  'Vestfold':             6,
-  'Agder':                7,
-  'Aust-Agder':           7,
-  'Vest-Agder':           7,
-  'Rogaland':             8,
-  'Vestland':             9,
-  'Hordaland':            9,
-  'Sogn og Fjordane':     9,
-  'Møre og Romsdal':      10,
-  'Trøndelag':            11,
-  'Sør-Trøndelag':        11,
-  'Nord-Trøndelag':       11,
-  'Nordland':             12,
-  'Troms og Finnmark':    13,
-  'Troms':                13,
-  'Finnmark':             13,
+const FYLKE_MAP: Record<string, { name: string; id: number }> = {
+  '03': { name: 'Oslo',                 id: 1  },
+  '02': { name: 'Akershus',             id: 2  },
+  '30': { name: 'Akershus',             id: 2  },
+  '01': { name: 'Østfold',              id: 3  },
+  '31': { name: 'Østfold',              id: 3  },
+  '34': { name: 'Innlandet',            id: 4  },
+  '06': { name: 'Innlandet',            id: 4  },
+  '05': { name: 'Buskerud',             id: 5  },
+  '32': { name: 'Buskerud',             id: 5  },
+  '07': { name: 'Vestfold og Telemark', id: 6  },
+  '08': { name: 'Vestfold og Telemark', id: 6  },
+  '33': { name: 'Vestfold og Telemark', id: 6  },
+  '09': { name: 'Agder',               id: 7  },
+  '10': { name: 'Agder',               id: 7  },
+  '42': { name: 'Agder',               id: 7  },
+  '11': { name: 'Rogaland',            id: 8  },
+  '46': { name: 'Vestland',            id: 9  },
+  '12': { name: 'Vestland',            id: 9  },
+  '14': { name: 'Vestland',            id: 9  },
+  '15': { name: 'Møre og Romsdal',     id: 10 },
+  '50': { name: 'Trøndelag',           id: 11 },
+  '16': { name: 'Trøndelag',           id: 11 },
+  '17': { name: 'Trøndelag',           id: 11 },
+  '18': { name: 'Nordland',            id: 12 },
+  '56': { name: 'Nordland',            id: 12 },
+  '19': { name: 'Troms og Finnmark',   id: 13 },
+  '20': { name: 'Troms og Finnmark',   id: 13 },
+  '54': { name: 'Troms og Finnmark',   id: 13 },
 }
 
-// Norwegian municipality → fylke mapping for the most important ones
-// Used as fallback when the API doesn't return fylke directly
-const KOMMUNE_TO_FYLKE: Record<string, string> = {
-  'Oslo': 'Oslo',
-  'Bærum': 'Akershus', 'Asker': 'Akershus', 'Lillestrøm': 'Akershus',
-  'Nordre Follo': 'Akershus', 'Ås': 'Akershus', 'Frogn': 'Akershus',
-  'Vestby': 'Akershus', 'Nesodden': 'Akershus', 'Aurskog-Høland': 'Akershus',
-  'Rælingen': 'Akershus', 'Enebakk': 'Akershus', 'Lørenskog': 'Akershus',
-  'Nittedal': 'Akershus', 'Gjerdrum': 'Akershus', 'Ullensaker': 'Akershus',
-  'Nannestad': 'Akershus', 'Eidsvoll': 'Akershus', 'Hurdal': 'Akershus',
-  'Sarpsborg': 'Østfold', 'Fredrikstad': 'Østfold', 'Halden': 'Østfold',
-  'Moss': 'Østfold', 'Råde': 'Østfold', 'Hvaler': 'Østfold',
-  'Indre Østfold': 'Østfold', 'Marker': 'Østfold', 'Rakkestad': 'Østfold',
-  'Hamar': 'Innlandet', 'Ringsaker': 'Innlandet', 'Lillehammer': 'Innlandet',
-  'Gjøvik': 'Innlandet', 'Elverum': 'Innlandet', 'Kongsvinger': 'Innlandet',
-  'Drammen': 'Buskerud', 'Kongsberg': 'Buskerud', 'Numedal': 'Buskerud',
-  'Lier': 'Buskerud', 'Øvre Eiker': 'Buskerud', 'Nedre Eiker': 'Buskerud',
-  'Tønsberg': 'Vestfold og Telemark', 'Sandefjord': 'Vestfold og Telemark',
-  'Larvik': 'Vestfold og Telemark', 'Skien': 'Vestfold og Telemark',
-  'Porsgrunn': 'Vestfold og Telemark', 'Telemark': 'Vestfold og Telemark',
-  'Horten': 'Vestfold og Telemark', 'Holmestrand': 'Vestfold og Telemark',
-  'Kristiansand': 'Agder', 'Arendal': 'Agder', 'Farsund': 'Agder',
-  'Stavanger': 'Rogaland', 'Sandnes': 'Rogaland', 'Haugesund': 'Rogaland',
-  'Bergen': 'Vestland', 'Fjord': 'Vestland', 'Sunnhordland': 'Vestland',
-  'Ålesund': 'Møre og Romsdal', 'Molde': 'Møre og Romsdal', 'Kristiansund': 'Møre og Romsdal',
-  'Trondheim': 'Trøndelag', 'Stjørdal': 'Trøndelag', 'Steinkjer': 'Trøndelag',
-  'Bodø': 'Nordland', 'Narvik': 'Nordland', 'Mo i Rana': 'Nordland',
-  'Tromsø': 'Troms og Finnmark', 'Alta': 'Troms og Finnmark', 'Harstad': 'Troms og Finnmark',
+// Postal code range fallback (municipality code prefix)
+const POSTNR_RANGE_FALLBACK = (nr: number): { fylke: string; id: number } | null => {
+  if (nr >= 100  && nr <= 991 ) return { fylke: 'Oslo',                 id: 1  }
+  if (nr >= 1000 && nr <= 1299) return { fylke: 'Akershus',             id: 2  }
+  if (nr >= 1300 && nr <= 1399) return { fylke: 'Akershus',             id: 2  }
+  if (nr >= 1400 && nr <= 1479) return { fylke: 'Akershus',             id: 2  }
+  if (nr >= 1480 && nr <= 1499) return { fylke: 'Akershus',             id: 2  }
+  if (nr >= 1500 && nr <= 1799) return { fylke: 'Østfold',              id: 3  }
+  if (nr >= 1800 && nr <= 1999) return { fylke: 'Akershus',             id: 2  }
+  if (nr >= 2000 && nr <= 2499) return { fylke: 'Innlandet',            id: 4  }
+  if (nr >= 2500 && nr <= 2999) return { fylke: 'Innlandet',            id: 4  }
+  if (nr >= 3000 && nr <= 3049) return { fylke: 'Buskerud',             id: 5  }
+  if (nr >= 3050 && nr <= 3299) return { fylke: 'Vestfold og Telemark', id: 6  }
+  if (nr >= 3300 && nr <= 3699) return { fylke: 'Buskerud',             id: 5  }
+  if (nr >= 3700 && nr <= 3999) return { fylke: 'Vestfold og Telemark', id: 6  }
+  if (nr >= 4000 && nr <= 4499) return { fylke: 'Rogaland',            id: 8  }
+  if (nr >= 4500 && nr <= 4999) return { fylke: 'Agder',               id: 7  }
+  if (nr >= 5000 && nr <= 5999) return { fylke: 'Vestland',            id: 9  }
+  if (nr >= 6000 && nr <= 6999) return { fylke: 'Møre og Romsdal',     id: 10 }
+  if (nr >= 7000 && nr <= 7999) return { fylke: 'Trøndelag',           id: 11 }
+  if (nr >= 8000 && nr <= 8999) return { fylke: 'Nordland',            id: 12 }
+  if (nr >= 9000 && nr <= 9999) return { fylke: 'Troms og Finnmark',   id: 13 }
+  return null
+}
+
+function capitalize(str: string): string {
+  if (!str) return str
+  return str
+    .toLowerCase()
+    .split(' ')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
 }
 
 export async function GET(request: Request) {
@@ -66,82 +74,75 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Use Bring/Posten's free postnumber API
-    const res = await fetch(
-      `https://fraktguide.bring.com/fraktguide/api/postalCode.json?clientUrl=partietsentrum.no&pnr=${postnr}&country=NO`,
-      {
-        headers: { 'Accept': 'application/json' },
-        next: { revalidate: 86400 }, // cache 24h
+    // Kartverket's stedsnavn/postnummer API — free, no auth, works from anywhere
+    const url = `https://ws.geonorge.no/adresser/v1/postnummer/${postnr}`
+    const res = await fetch(url, {
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    })
+
+    if (!res.ok) {
+      // Fallback to range-based if API fails
+      const nr = parseInt(postnr)
+      const fallback = POSTNR_RANGE_FALLBACK(nr)
+      if (fallback) {
+        return NextResponse.json({
+          postnr,
+          poststed: '',
+          kommune: '',
+          fylke: fallback.fylke,
+          fylkeslagId: fallback.id,
+        })
       }
-    )
-
-    if (!res.ok) throw new Error('Bring API feilet')
-
-    const data = await res.json()
-
-    if (!data.valid || !data.result) {
       return NextResponse.json({ error: 'Ukjent postnummer' }, { status: 404 })
     }
 
-    // Bring returns: { valid: true, result: "OSLO", city: "OSLO" }
-    // We also need municipality — use a secondary lookup
-    const poststed = data.result as string
+    const data = await res.json()
 
-    // Try to get municipality from the Norwegian post API (Posten)
-    let kommune = poststed
-    let fylke = ''
+    // Geonorge returns: { postnummer, poststed, kommunenummer, kommunenavn, fylkesnummer, fylkesnavn }
+    const poststed   = capitalize(data.poststed   ?? '')
+    const kommune    = capitalize(data.kommunenavn ?? '')
+    const fylkesnr   = data.fylkesnummer as string | undefined
+    const fylkesnavn = capitalize(data.fylkesnavn ?? '')
+
     let fylkeslagId: number | null = null
+    let fylke = fylkesnavn
 
-    try {
-      const postenRes = await fetch(
-        `https://api.bring.com/shippingguide/api/postalCode.json?clientUrl=partietsentrum.no&pnr=${postnr}&country=NO`,
-        { headers: { 'Accept': 'application/json' }, next: { revalidate: 86400 } }
-      )
-      if (postenRes.ok) {
-        const postenData = await postenRes.json()
-        if (postenData.city) kommune = postenData.city
-      }
-    } catch { /* fallback to poststed */ }
-
-    // Map municipality to fylke
-    const normalizedKommune = Object.keys(KOMMUNE_TO_FYLKE).find(k =>
-      kommune.toLowerCase().includes(k.toLowerCase()) ||
-      k.toLowerCase().includes(kommune.toLowerCase())
-    )
-
-    if (normalizedKommune) {
-      fylke = KOMMUNE_TO_FYLKE[normalizedKommune]
-      fylkeslagId = FYLKE_TO_ID[fylke] ?? null
+    if (fylkesnr && FYLKE_MAP[fylkesnr]) {
+      const mapped = FYLKE_MAP[fylkesnr]
+      fylkeslagId = mapped.id
+      fylke = mapped.name
     } else {
-      // Postnummer range-based fallback
       const nr = parseInt(postnr)
-      if (nr >= 100 && nr <= 991) { fylke = 'Oslo'; fylkeslagId = 1 }
-      else if (nr >= 1000 && nr <= 1999) { fylke = 'Akershus'; fylkeslagId = 2 }
-      else if (nr >= 1700 && nr <= 1899) { fylke = 'Akershus'; fylkeslagId = 2 }
-      else if (nr >= 1500 && nr <= 1699) { fylke = 'Østfold'; fylkeslagId = 3 }
-      else if (nr >= 1900 && nr <= 2499) { fylke = 'Innlandet'; fylkeslagId = 4 }
-      else if (nr >= 3000 && nr <= 3699) { fylke = 'Buskerud'; fylkeslagId = 5 }
-      else if (nr >= 3100 && nr <= 3299) { fylke = 'Vestfold og Telemark'; fylkeslagId = 6 }
-      else if (nr >= 3700 && nr <= 3999) { fylke = 'Vestfold og Telemark'; fylkeslagId = 6 }
-      else if (nr >= 4500 && nr <= 4999) { fylke = 'Agder'; fylkeslagId = 7 }
-      else if (nr >= 4000 && nr <= 4499) { fylke = 'Rogaland'; fylkeslagId = 8 }
-      else if (nr >= 5000 && nr <= 5999) { fylke = 'Vestland'; fylkeslagId = 9 }
-      else if (nr >= 6000 && nr <= 6999) { fylke = 'Møre og Romsdal'; fylkeslagId = 10 }
-      else if (nr >= 7000 && nr <= 7999) { fylke = 'Trøndelag'; fylkeslagId = 11 }
-      else if (nr >= 8000 && nr <= 8999) { fylke = 'Nordland'; fylkeslagId = 12 }
-      else if (nr >= 9000 && nr <= 9999) { fylke = 'Troms og Finnmark'; fylkeslagId = 13 }
+      const fallback = POSTNR_RANGE_FALLBACK(nr)
+      if (fallback) {
+        fylkeslagId = fallback.id
+        fylke = fallback.fylke
+      }
     }
 
     return NextResponse.json({
       postnr,
-      poststed: poststed.charAt(0) + poststed.slice(1).toLowerCase(),
-      kommune: kommune.charAt(0) + kommune.slice(1).toLowerCase(),
+      poststed,
+      kommune,
       fylke,
       fylkeslagId,
     })
 
   } catch (err) {
     console.error('Postnummer lookup feilet:', err)
+    // Always return a range-based fallback rather than 500
+    const nr = parseInt(postnr)
+    const fallback = POSTNR_RANGE_FALLBACK(nr)
+    if (fallback) {
+      return NextResponse.json({
+        postnr,
+        poststed: '',
+        kommune: '',
+        fylke: fallback.fylke,
+        fylkeslagId: fallback.id,
+      })
+    }
     return NextResponse.json({ error: 'Kunne ikke slå opp postnummer' }, { status: 500 })
   }
 }
