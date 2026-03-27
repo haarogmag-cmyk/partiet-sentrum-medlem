@@ -8,7 +8,7 @@ interface Props {
 
 export default async function SkjemaPage({ params }: Props) {
   const { id } = await params
-  const supabase = await createServerSupabaseClient()
+  const supabase = await createClient()
 
   const { data: form } = await supabase
     .from('forms')
