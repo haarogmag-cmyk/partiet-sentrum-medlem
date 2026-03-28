@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 
 const inp: React.CSSProperties = { width:'100%', padding:'12px 16px', fontSize:'14px', fontFamily:'inherit', background:'#f9fafb', border:'1.5px solid #e5e7eb', borderRadius:'10px', color:'#0f0f1a', outline:'none' }
 const focus = (e: React.FocusEvent<HTMLInputElement>) => { e.target.style.borderColor='#c93960'; e.target.style.background='white'; e.target.style.boxShadow='0 0 0 3px rgba(201,57,96,.1)'; }
-const blur  = (e: React.FocusEvent<HTMLInputElement>) => { e.target.style.borderColor='#e5e7eb'; e.target.style.background='#f9fafb'; e.target.style.boxShadow='none'; }
+const blur = (e: React.FocusEvent<HTMLInputElement>) => { e.target.style.borderColor='#e5e7eb'; e.target.style.background='#f9fafb'; e.target.style.boxShadow='none'; }
 
 export default function LoginPage() {
   const router = useRouter()
@@ -19,11 +19,39 @@ export default function LoginPage() {
   const [resetSent, setResetSent] = useState(false)
 
   async function handleLogin() {
-    if (!email||!password) return toast.error('Fyll inn e-post og passord.')
+    if (!email || !password) return toast.error('Fyll inn e-post og passord.')
     setLoading(true)
-    const { error } = await createClient().auth.signInWithPassword({ email, password })
-    if (error) toast.error('Feil e-post eller passord.')
-    else router.push('/dashboard')
+    
+    const supabase = createClient()
+
+    // 1. Logg inn brukeren
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password })
+    
+    if (authError) {
+      toast.error('Feil e-post eller passord.')
+      setLoading(false)
+      return
+    }
+
+    // 2. Sjekk om brukeren er admin i profiles-tabellen
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', authData.user.id)
+      .single()
+
+    if (profileError) {
+      console.error('Kunne ikke hente profil:', profileError)
+      // Fallback til dashboard hvis profil-sjekk feiler
+      router.push('/dashboard')
+    } else if (profile?.is_admin) {
+      // 3. Send til admin hvis is_admin er true
+      router.push('/admin')
+    } else {
+      // 4. Send til vanlig dashboard ellers
+      router.push('/dashboard')
+    }
+    
     setLoading(false)
   }
 
