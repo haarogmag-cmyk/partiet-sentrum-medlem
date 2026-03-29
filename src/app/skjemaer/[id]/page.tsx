@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { notFound } from 'next/navigation'
 import FormResponseClient from './FormResponseClient'
 
@@ -8,7 +8,7 @@ interface Props {
 
 export default async function SkjemaPage({ params }: Props) {
   const { id } = await params
-  const supabase = await createClient()
+  const supabase = await createServerSupabaseClient()
 
   const { data: form } = await supabase
     .from('forms')
