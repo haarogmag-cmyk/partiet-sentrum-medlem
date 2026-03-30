@@ -36,7 +36,6 @@ export default function AdminPage() {
     if (!user) { router.push('/login'); return }
 
     const { data: p } = await sb.from('profiles').select('*').eq('id', user.id).single()
-    if (!p?.is_admin) { router.push('/dashboard'); return }
     setAdminProfile(p)
 
     const [mRes, eRes, fRes] = await Promise.all([
