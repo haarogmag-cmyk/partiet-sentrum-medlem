@@ -39,12 +39,6 @@ export default function DashboardPage() {
       setProfile(p)
       setEvents(eRes.data ?? [])
 
-      // Admins get redirected to admin panel on first load
-      if (p?.is_admin) {
-        router.replace('/admin')
-        return
-      }
-
       if (p?.fylkeslag_id) {
         const { data } = await sb.from('fylkeslag').select('name').eq('id', p.fylkeslag_id).single()
         setFylkeslagName(data?.name ?? null)
